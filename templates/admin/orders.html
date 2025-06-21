@@ -1,0 +1,250 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Orders{% endblock title %}
+{% block page_heading %}Manage Orders{% endblock page_heading %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-md">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">All Orders</h2>
+        <!-- Add Order Button (optional, can be added later) -->
+        <!-- <button id="addOrderBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Add New Order</button> -->
+    </div>
+
+    <div class="overflow-x-auto">
+        <table id="ordersTable" class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order Date</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for order in orders %}
+                <tr data-id="{{ order.id }}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ order.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.order_date.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.supplier.name if order.supplier else 'N/A' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">€{{ "%.2f"|format(order.total_amount) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            {% if order.status == 'pending' %}bg-yellow-100 text-yellow-800
+                            {% elif order.status == 'completed' %}bg-green-100 text-green-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ order.status.capitalize() }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="view-details-btn text-blue-600 hover:text-blue-900 mr-2">View Details</button>
+                        {% if order.status == 'pending' %}
+                        <button class="complete-order-btn bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded-md text-xs">Complete</button>
+                        {% endif %}
+                        <button class="delete-btn text-red-600 hover:text-red-900 ml-2">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Order Details Modal -->
+<div id="orderDetailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl">
+        <h3 class="text-xl font-bold mb-4">Order Details #<span id="modalOrderId"></span></h3>
+        <div id="orderDetailsContent" class="mb-4">
+            <!-- Details will be loaded here -->
+        </div>
+        <div class="flex justify-end">
+            <button type="button" id="closeOrderDetailsBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Complete Order Modal -->
+<div id="completeOrderModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+        <h3 class="text-xl font-bold mb-4">Complete Order #<span id="completeModalOrderId"></span></h3>
+        <form id="completeOrderForm">
+            <input type="hidden" id="completeOrderId">
+            <div id="batchInputContainer" class="mb-4 space-y-4">
+                <!-- Batch inputs will be dynamically added here -->
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" id="cancelCompleteOrderBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">Confirm Completion</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ordersTable = document.getElementById('ordersTable');
+        const orderDetailsModal = document.getElementById('orderDetailsModal');
+        const modalOrderId = document.getElementById('modalOrderId');
+        const orderDetailsContent = document.getElementById('orderDetailsContent');
+        const closeOrderDetailsBtn = document.getElementById('closeOrderDetailsBtn');
+
+        const completeOrderModal = document.getElementById('completeOrderModal');
+        const completeModalOrderId = document.getElementById('completeModalOrderId');
+        const completeOrderIdInput = document.getElementById('completeOrderId');
+        const batchInputContainer = document.getElementById('batchInputContainer');
+        const cancelCompleteOrderBtn = document.getElementById('cancelCompleteOrderBtn');
+        const completeOrderForm = document.getElementById('completeOrderForm');
+
+        // Close Order Details Modal
+        closeOrderDetailsBtn.addEventListener('click', () => {
+            orderDetailsModal.classList.add('hidden');
+        });
+
+        // Close Complete Order Modal
+        cancelCompleteOrderBtn.addEventListener('click', () => {
+            completeOrderModal.classList.add('hidden');
+            batchInputContainer.innerHTML = ''; // Clear batch inputs
+        });
+
+        // Handle Table Clicks (View Details, Complete, Delete)
+        ordersTable.addEventListener('click', async (e) => {
+            const row = e.target.closest('tr');
+            if (!row) return;
+            const orderId = row.dataset.id;
+
+            if (e.target.classList.contains('view-details-btn')) {
+                modalOrderId.textContent = orderId;
+                orderDetailsContent.innerHTML = '<p class="text-gray-500">Loading order details...</p>';
+                orderDetailsModal.classList.remove('hidden');
+
+                try {
+                    const response = await fetch(`/admin/api/orders/${orderId}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch order details');
+                    }
+                    const order = await response.json();
+                    
+                    let detailsHtml = `
+                        <p><strong>Order Date:</strong> ${order.order_date}</p>
+                        <p><strong>Supplier:</strong> ${order.supplier_name || 'N/A'}</p>
+                        <p><strong>Status:</strong> ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}</p>
+                        <p><strong>Total Amount:</strong> €${order.total_amount.toFixed(2)}</p>
+                        <h4 class="font-semibold mt-4 mb-2">Items:</h4>
+                        <ul class="list-disc pl-5 space-y-1">
+                    `;
+                    if (order.details && order.details.length > 0) {
+                        order.details.forEach(detail => {
+                            detailsHtml += `<li>${detail.good_name}: ${detail.quantity} @ €${detail.price_per_unit.toFixed(2)}/unit (Total: €${detail.total_price.toFixed(2)})</li>`;
+                        });
+                    } else {
+                        detailsHtml += `<li>No items in this order.</li>`;
+                    }
+                    detailsHtml += `</ul>`;
+                    orderDetailsContent.innerHTML = detailsHtml;
+
+                } catch (error) {
+                    orderDetailsContent.innerHTML = `<p class="text-red-500">Error loading details: ${error.message}</p>`;
+                    console.error('Error fetching order details:', error);
+                }
+            } else if (e.target.classList.contains('complete-order-btn')) {
+                completeModalOrderId.textContent = orderId;
+                completeOrderIdInput.value = orderId;
+                batchInputContainer.innerHTML = ''; // Clear previous inputs
+
+                try {
+                    const response = await fetch(`/admin/api/orders/${orderId}`);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch order details for completion');
+                    }
+                    const order = await response.json();
+                    
+                    if (order.details && order.details.length > 0) {
+                        order.details.forEach(detail => {
+                            batchInputContainer.innerHTML += `
+                                <div class="bg-gray-50 p-3 rounded-md border border-gray-200">
+                                    <h4 class="font-medium mb-2 text-gray-800">${detail.good_name} (${detail.quantity} ${order.good_unit || 'units'})</h4>
+                                    <input type="hidden" name="good_id" value="${detail.good_id}">
+                                    <div class="mb-2">
+                                        <label for="batch_number_${detail.good_id}" class="block text-gray-700 text-sm font-bold mb-1">Batch Number:</label>
+                                        <input type="text" id="batch_number_${detail.good_id}" name="batch_number" required
+                                               class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label for="expiry_date_${detail.good_id}" class="block text-gray-700 text-sm font-bold mb-1">Expiry Date (Optional):</label>
+                                        <input type="date" id="expiry_date_${detail.good_id}" name="expiry_date"
+                                               class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700">
+                                    </div>
+                                    <input type="hidden" name="quantity" value="${detail.quantity}">
+                                </div>
+                            `;
+                        });
+                    } else {
+                        batchInputContainer.innerHTML = `<p class="text-red-500">No items found in this order to complete.</p>`;
+                        completeOrderForm.querySelector('button[type="submit"]').disabled = true; // Disable submit if no items
+                    }
+                    completeOrderModal.classList.remove('hidden');
+
+                } catch (error) {
+                    alert('Error loading order details for completion: ' + error.message);
+                    console.error('Error fetching order details for completion:', error);
+                }
+
+            } else if (e.target.classList.contains('delete-btn')) {
+                if (confirm('Are you sure you want to delete this order? This will also delete associated order details and payments.')) {
+                    try {
+                        const response = await fetch(`/admin/api/orders/${orderId}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || 'Failed to delete order');
+                        }
+                        alert('Order deleted successfully!');
+                        row.remove(); // Remove row from table
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    }
+                }
+            }
+        });
+
+        // Handle Complete Order Form Submission
+        completeOrderForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const orderId = completeOrderIdInput.value;
+            const batchInputs = batchInputContainer.querySelectorAll('.bg-gray-50');
+            const batchesData = [];
+
+            batchInputs.forEach(batchDiv => {
+                const good_id = batchDiv.querySelector('input[name="good_id"]').value;
+                const batch_number = batchDiv.querySelector('input[name="batch_number"]').value;
+                const quantity = parseFloat(batchDiv.querySelector('input[name="quantity"]').value);
+                const expiry_date = batchDiv.querySelector('input[name="expiry_date"]').value;
+
+                batchesData.push({ good_id, batch_number, quantity, expiry_date });
+            });
+
+            try {
+                const response = await fetch(`/admin/api/orders/${orderId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ batches: batchesData })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to complete order');
+                }
+
+                alert('Order completed and inventory updated!');
+                completeOrderModal.classList.add('hidden');
+                location.reload(); // Reload to update order status
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    });
+</script>
+{% endblock content %}

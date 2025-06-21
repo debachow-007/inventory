@@ -1,0 +1,85 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Dashboard{% endblock title %}
+{% block page_heading %}Dashboard Overview{% endblock page_heading %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+    <!-- Card: Low Stock Items -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center">
+            <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i> Low Stock Items
+        </h3>
+        {% if inventory_items %}
+        <ul class="space-y-2">
+            {% for item in inventory_items %}
+            <li class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                <span class="text-gray-700">{{ item.name }}</span>
+                <span class="text-sm font-medium text-red-600">{{ item.current_stock_quantity }} {{ item.unit }} (Reorder: {{ item.reorder_level }} {{ item.unit }})</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-gray-500">No low stock items detected.</p>
+        {% endif %}
+    </div>
+
+    <!-- Card: Pending Orders -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center">
+            <i class="fas fa-hourglass-half text-yellow-500 mr-2"></i> Pending Orders
+        </h3>
+        {% if pending_orders %}
+        <ul class="space-y-2">
+            {% for order in pending_orders %}
+            <li class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                <span class="text-gray-700">Order #{{ order.id }} - {{ order.supplier.name if order.supplier else 'N/A' }}</span>
+                <span class="text-sm font-medium text-gray-600">{{ order.order_date.strftime('%Y-%m-%d') }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-gray-500">No pending orders.</p>
+        {% endif %}
+    </div>
+
+    <!-- Card: Expiring Stocks -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center">
+            <i class="fas fa-calendar-times text-orange-500 mr-2"></i> Expiring Soon
+        </h3>
+        {% if expiring_batches %}
+        <ul class="space-y-2">
+            {% for batch in expiring_batches %}
+            <li class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                <span class="text-gray-700">{{ batch.good.name }} (Batch: {{ batch.batch_number }})</span>
+                <span class="text-sm font-medium text-orange-600">Expires: {{ batch.expiry_date.strftime('%Y-%m-%d') }} ({{ batch.quantity }} {{ batch.good.unit }})</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-gray-500">No stock expiring in the next 30 days.</p>
+        {% endif %}
+    </div>
+
+    <!-- Card: Upcoming Tasks -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold mb-4 text-gray-800 flex items-center">
+            <i class="fas fa-calendar-check text-blue-500 mr-2"></i> Upcoming Tasks
+        </h3>
+        {% if upcoming_tasks %}
+        <ul class="space-y-2">
+            {% for task in upcoming_tasks %}
+            <li class="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                <span class="text-gray-700">{{ task.title }}</span>
+                <span class="text-sm font-medium text-blue-600">Due: {{ task.due_date.strftime('%Y-%m-%d') }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-gray-500">No upcoming tasks.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock content %}

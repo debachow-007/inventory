@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Dashboard{% endblock title %} - Restaurant IMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #1f2937; /* Dark gray for sidebar */
+            color: #d1d5db; /* Light gray text */
+            transition: width 0.3s ease-in-out;
+            flex-shrink: 0;
+            overflow-y: auto;
+        }
+        .sidebar.collapsed {
+            width: 64px; /* w-16 */
+        }
+        .sidebar-item-text {
+            display: inline-block;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .sidebar.collapsed .sidebar-item-text {
+            opacity: 0;
+            width: 0;
+            overflow: hidden;
+        }
+        .content-area {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="flex h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar flex flex-col p-4">
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-2xl font-bold text-white sidebar-item-text">IMS Admin</h1>
+            <button id="sidebarToggle" class="text-white focus:outline-none">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <nav class="flex-grow">
+            <ul>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.dashboard') }}"
+                       class="flex items-center p-3 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out">
+                        <i class="fas fa-tachometer-alt mr-3 text-lg"></i>
+                        <span class="sidebar-item-text">Dashboard</span>
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.inventory') }}"
+                       class="flex items-center p-3 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out">
+                        <i class="fas fa-boxes mr-3 text-lg"></i>
+                        <span class="sidebar-item-text">Inventory</span>
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.orders') }}"
+                       class="flex items-center p-3 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out">
+                        <i class="fas fa-clipboard-list mr-3 text-lg"></i>
+                        <span class="sidebar-item-text">Orders</span>
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.tasks') }}"
+                       class="flex items-center p-3 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out">
+                        <i class="fas fa-tasks mr-3 text-lg"></i>
+                        <span class="sidebar-item-text">Tasks</span>
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.suppliers') }}"
+                       class="flex items-center p-3 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out">
+                        <i class="fas fa-truck mr-3 text-lg"></i>
+                        <span class="sidebar-item-text">Suppliers</span>
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.users') }}"
+                       class="flex items-center p-3 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition duration-150 ease-in-out">
+                        <i class="fas fa-users mr-3 text-lg"></i>
+                        <span class="sidebar-item-text">Users</span>
+                    </a>
+                </li>
+                <!-- Add more menu items here as needed -->
+            </ul>
+        </nav>
+        <div class="mt-auto">
+            <a href="{{ url_for('logout') }}"
+               class="flex items-center p-3 rounded-md text-red-300 hover:bg-gray-700 hover:text-red-500 transition duration-150 ease-in-out">
+                <i class="fas fa-sign-out-alt mr-3 text-lg"></i>
+                <span class="sidebar-item-text">Logout</span>
+            </a>
+            <div class="mt-4 text-xs text-gray-400 sidebar-item-text">
+                Logged in as: {{ current_user.username }}
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area p-6">
+        <header class="bg-white shadow-sm rounded-lg p-4 mb-6 flex justify-between items-center">
+            <h1 class="text-2xl font-semibold text-gray-800">{% block page_heading %}{% endblock page_heading %}</h1>
+            <div>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="flash-messages">
+                            {% for category, message in messages %}
+                                <div class="p-2 px-4 rounded-md text-sm {% if category == 'success' %}bg-green-100 text-green-700{% elif category == 'danger' %}bg-red-100 text-red-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                                    {{ message }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            </div>
+        </header>
+
+        {% block content %}{% endblock content %}
+    </main>
+
+    <script>
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+        });
+    </script>
+</body>
+</html>
