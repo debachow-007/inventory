@@ -7,8 +7,9 @@
 <div class="bg-white p-6 rounded-lg shadow-md">
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-semibold text-gray-800">All Orders</h2>
-        <!-- Add Order Button (optional, can be added later) -->
-        <!-- <button id="addOrderBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Add New Order</button> -->
+        <button id="addOrderBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
+            Place New Order
+        </button>
     </div>
 
     <div class="overflow-x-auto">
@@ -82,6 +83,46 @@
     </div>
 </div>
 
+<!-- Add New Order Modal -->
+<div id="newOrderModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl overflow-y-auto max-h-[90vh]">
+        <h3 class="text-xl font-bold mb-4">Place New Order</h3>
+        <form id="newOrderForm">
+            <div class="mb-4">
+                <label for="newOrderSupplier" class="block text-gray-700 text-sm font-bold mb-2">Supplier:</label>
+                <select id="newOrderSupplier" name="supplier_id" required
+                        class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">Select a Supplier</option>
+                    <!-- Options will be loaded via JavaScript -->
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="newOrderExpectedDelivery" class="block text-gray-700 text-sm font-bold mb-2">Expected Delivery Date:</label>
+                <input type="date" id="newOrderExpectedDelivery" name="expected_delivery_date"
+                       class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+
+            <h4 class="text-lg font-semibold mb-3">Order Items:</h4>
+            <div id="orderItemsContainer" class="space-y-4 mb-4 border p-4 rounded-md bg-gray-50">
+                <!-- Dynamic order items will be added here -->
+            </div>
+            <button type="button" id="addItemBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md mb-4 flex items-center">
+                <i class="fas fa-plus mr-2"></i> Add Item
+            </button>
+
+            <div class="text-right text-xl font-bold text-gray-800 mb-6">
+                Total Amount: <span id="newOrderTotalAmount">€0.00</span>
+            </div>
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" id="cancelNewOrderBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Place Order</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const ordersTable = document.getElementById('ordersTable');
@@ -97,6 +138,112 @@
         const cancelCompleteOrderBtn = document.getElementById('cancelCompleteOrderBtn');
         const completeOrderForm = document.getElementById('completeOrderForm');
 
+        // New Order elements
+        const addOrderBtn = document.getElementById('addOrderBtn');
+        const newOrderModal = document.getElementById('newOrderModal');
+        const cancelNewOrderBtn = document.getElementById('cancelNewOrderBtn');
+        const newOrderForm = document.getElementById('newOrderForm');
+        const newOrderSupplierSelect = document.getElementById('newOrderSupplier');
+        const newOrderExpectedDeliveryInput = document.getElementById('newOrderExpectedDelivery');
+        const orderItemsContainer = document.getElementById('orderItemsContainer');
+        const addItemBtn = document.getElementById('addItemBtn');
+        const newOrderTotalAmountSpan = document.getElementById('newOrderTotalAmount');
+
+        let allGoods = [];
+        let allSuppliers = [];
+
+        // Fetch initial data for dropdowns
+        async function fetchInitialData() {
+            try {
+                const [goodsResponse, suppliersResponse] = await Promise.all([
+                    fetch('/admin/api/goods'),
+                    fetch('/admin/api/suppliers')
+                ]);
+
+                if (!goodsResponse.ok || !suppliersResponse.ok) {
+                    throw new Error('Failed to fetch initial data.');
+                }
+
+                allGoods = await goodsResponse.json();
+                allSuppliers = await suppliersResponse.json();
+
+                populateSupplierSelect();
+                addNewOrderItem(); // Add initial item row
+            } catch (error) {
+                alert('Error loading initial data: ' + error.message);
+                console.error('Error fetching initial data:', error);
+            }
+        }
+
+        function populateSupplierSelect() {
+            newOrderSupplierSelect.innerHTML = '<option value="">Select a Supplier</option>';
+            allSuppliers.forEach(supplier => {
+                const option = document.createElement('option');
+                option.value = supplier.id;
+                option.textContent = supplier.name;
+                newOrderSupplierSelect.appendChild(option);
+            });
+        }
+
+        function createGoodOptionsHtml() {
+            let options = '<option value="">Select a Good</option>';
+            allGoods.forEach(good => {
+                options += `<option value="${good.id}" data-unit="${good.unit}">${good.name}</option>`;
+            });
+            return options;
+        }
+
+        function addNewOrderItem() {
+            const itemIndex = orderItemsContainer.children.length;
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('flex', 'items-end', 'space-x-2', 'item-row', 'p-3', 'border', 'rounded-md', 'bg-white');
+            itemDiv.innerHTML = `
+                <div class="flex-1">
+                    <label for="item_good_${itemIndex}" class="block text-gray-700 text-xs font-bold mb-1">Good:</label>
+                    <select id="item_good_${itemIndex}" name="good_id" required
+                            class="item-good-select shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        ${createGoodOptionsHtml()}
+                    </select>
+                </div>
+                <div class="w-24">
+                    <label for="item_qty_${itemIndex}" class="block text-gray-700 text-xs font-bold mb-1">Quantity:</label>
+                    <input type="number" step="0.01" id="item_qty_${itemIndex}" name="quantity" required value="0.01" min="0.01"
+                           class="item-quantity-input shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div class="w-32">
+                    <label for="item_price_${itemIndex}" class="block text-gray-700 text-xs font-bold mb-1">Price/Unit (€):</label>
+                    <input type="number" step="0.01" id="item_price_${itemIndex}" name="price_per_unit" required value="0.01" min="0.01"
+                           class="item-price-input shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <button type="button" class="remove-item-btn bg-red-500 hover:bg-red-600 text-white py-2 px-3 rounded-md text-sm">
+                    <i class="fas fa-minus"></i>
+                </button>
+            `;
+            orderItemsContainer.appendChild(itemDiv);
+
+            // Add event listeners for new inputs
+            itemDiv.querySelector('.item-quantity-input').addEventListener('input', calculateTotal);
+            itemDiv.querySelector('.item-price-input').addEventListener('input', calculateTotal);
+            itemDiv.querySelector('.remove-item-btn').addEventListener('click', (e) => {
+                itemDiv.remove();
+                calculateTotal(); // Recalculate after removing item
+            });
+            calculateTotal(); // Initial calculation for the new row
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            const itemRows = orderItemsContainer.querySelectorAll('.item-row');
+            itemRows.forEach(row => {
+                const quantity = parseFloat(row.querySelector('.item-quantity-input').value) || 0;
+                const pricePerUnit = parseFloat(row.querySelector('.item-price-input').value) || 0;
+                total += (quantity * pricePerUnit);
+            });
+            newOrderTotalAmountSpan.textContent = `€${total.toFixed(2)}`;
+        }
+
+        // --- Event Listeners ---
+
         // Close Order Details Modal
         closeOrderDetailsBtn.addEventListener('click', () => {
             orderDetailsModal.classList.add('hidden');
@@ -107,6 +254,22 @@
             completeOrderModal.classList.add('hidden');
             batchInputContainer.innerHTML = ''; // Clear batch inputs
         });
+
+        // Open New Order Modal
+        addOrderBtn.addEventListener('click', () => {
+            newOrderForm.reset();
+            orderItemsContainer.innerHTML = ''; // Clear previous items
+            fetchInitialData(); // Load suppliers and goods, and add initial item row
+            newOrderModal.classList.remove('hidden');
+        });
+
+        // Close New Order Modal
+        cancelNewOrderBtn.addEventListener('click', () => {
+            newOrderModal.classList.add('hidden');
+        });
+
+        // Add New Item Row
+        addItemBtn.addEventListener('click', addNewOrderItem);
 
         // Handle Table Clicks (View Details, Complete, Delete)
         ordersTable.addEventListener('click', async (e) => {
@@ -162,9 +325,13 @@
                     
                     if (order.details && order.details.length > 0) {
                         order.details.forEach(detail => {
+                            // Find the good to get its unit if needed for display
+                            const good = allGoods.find(g => g.id === detail.good_id);
+                            const goodUnit = good ? good.unit : 'units';
+
                             batchInputContainer.innerHTML += `
                                 <div class="bg-gray-50 p-3 rounded-md border border-gray-200">
-                                    <h4 class="font-medium mb-2 text-gray-800">${detail.good_name} (${detail.quantity} ${order.good_unit || 'units'})</h4>
+                                    <h4 class="font-medium mb-2 text-gray-800">${detail.good_name} (${detail.quantity} ${goodUnit})</h4>
                                     <input type="hidden" name="good_id" value="${detail.good_id}">
                                     <div class="mb-2">
                                         <label for="batch_number_${detail.good_id}" class="block text-gray-700 text-sm font-bold mb-1">Batch Number:</label>
@@ -218,7 +385,7 @@
             const batchesData = [];
 
             batchInputs.forEach(batchDiv => {
-                const good_id = batchDiv.querySelector('input[name="good_id"]').value;
+                const good_id = parseInt(batchDiv.querySelector('input[name="good_id"]').value);
                 const batch_number = batchDiv.querySelector('input[name="batch_number"]').value;
                 const quantity = parseFloat(batchDiv.querySelector('input[name="quantity"]').value);
                 const expiry_date = batchDiv.querySelector('input[name="expiry_date"]').value;
@@ -245,6 +412,76 @@
                 alert('Error: ' + error.message);
             }
         });
+
+        // Handle New Order Form Submission
+        newOrderForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const supplierId = newOrderSupplierSelect.value;
+            const expectedDeliveryDate = newOrderExpectedDeliveryInput.value || null; // Can be null
+
+            const orderDetails = [];
+            const itemRows = orderItemsContainer.querySelectorAll('.item-row');
+            
+            // Validate at least one item
+            if (itemRows.length === 0) {
+                alert('Please add at least one item to the order.');
+                return;
+            }
+
+            let totalOrderAmount = 0;
+
+            for (const row of itemRows) {
+                const goodId = parseInt(row.querySelector('.item-good-select').value);
+                const quantity = parseFloat(row.querySelector('.item-quantity-input').value);
+                const pricePerUnit = parseFloat(row.querySelector('.item-price-input').value);
+
+                if (!goodId || isNaN(quantity) || quantity <= 0 || isNaN(pricePerUnit) || pricePerUnit <= 0) {
+                    alert('Please ensure all order item fields (Good, Quantity, Price/Unit) are valid and positive.');
+                    return; // Stop submission if validation fails
+                }
+                
+                const totalPrice = quantity * pricePerUnit;
+                totalOrderAmount += totalPrice;
+
+                orderDetails.push({
+                    good_id: goodId,
+                    quantity: quantity,
+                    price_per_unit: pricePerUnit,
+                    total_price: totalPrice // Calculate total price per item for consistency
+                });
+            }
+
+            const orderData = {
+                user_id: {{ current_user.id }}, // Assuming current_user is available in Jinja context
+                supplier_id: parseInt(supplierId) || null,
+                expected_delivery_date: expectedDeliveryDate,
+                total_amount: totalOrderAmount,
+                details: orderDetails
+            };
+
+            try {
+                const response = await fetch('/admin/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to place new order');
+                }
+
+                alert('New order placed successfully!');
+                newOrderModal.classList.add('hidden');
+                location.reload(); // Reload the page to see the new order
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        // Initial fetch for goods and suppliers when the page loads (for complete order modal)
+        // No need to call fetchInitialData here as addOrderBtn click handles it.
     });
 </script>
 {% endblock content %}

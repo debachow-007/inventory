@@ -286,7 +286,8 @@ def create_crud_endpoints(bp, model, name):
     @bp.route(f'/api/{name}', methods=['GET'], endpoint=f'get_all_{name}') # Unique endpoint name
     def get_all():
         items = model.query.all()
-        return jsonify([item.to_dict() if hasattr(item, 'to_dict') else item.__dict__ for item in items])
+        return jsonify([item.to_dict() for item in items])
+
 
     # Get single item
     @bp.route(f'/api/{name}/<int:item_id>', methods=['GET'], endpoint=f'get_single_{name}') # Unique endpoint name
