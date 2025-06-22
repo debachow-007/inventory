@@ -1,4 +1,4 @@
-{% extends 'admin/base.html' %}
+{% extends 'staff/base.html' %}
 
 {% block title %}Orders{% endblock title %}
 {% block page_heading %}Manage Orders{% endblock page_heading %}
@@ -60,17 +60,20 @@
     </div>
 </div>
 
+<!-- Order Details Modal -->
 <div id="orderDetailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl">
         <h3 class="text-xl font-bold mb-4">Order Details #<span id="modalOrderId"></span></h3>
         <div id="orderDetailsContent" class="mb-4">
-            </div>
+            <!-- Details will be loaded here -->
+        </div>
         <div class="flex justify-end">
             <button type="button" id="closeOrderDetailsBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Close</button>
         </div>
     </div>
 </div>
 
+<!-- Complete Order Modal -->
 <div id="completeOrderModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-xl overflow-y-auto max-h-[90vh]">
         <h3 class="text-xl font-bold mb-4">Complete Order #<span id="completeModalOrderId"></span></h3>
@@ -88,7 +91,8 @@
 
             <h4 class="text-lg font-semibold mb-3">Items Received:</h4>
             <div id="itemsReceivedContainer" class="mb-4 space-y-4 border p-4 rounded-md bg-gray-50">
-                </div>
+                <!-- Order item details and batch inputs will be dynamically added here -->
+            </div>
             
             <div class="flex justify-end space-x-2">
                 <button type="button" id="cancelCompleteOrderBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
@@ -98,6 +102,7 @@
     </div>
 </div>
 
+<!-- Add New Order Modal -->
 <div id="newOrderModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl overflow-y-auto max-h-[90vh]">
         <h3 class="text-xl font-bold mb-4">Place New Order</h3>
@@ -107,7 +112,8 @@
                 <select id="newOrderSupplier" name="supplier_id" required
                         class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <option value="">Select a Supplier</option>
-                    </select>
+                    <!-- Options will be loaded via JavaScript -->
+                </select>
             </div>
             <div class="mb-4">
                 <label for="newOrderExpectedDelivery" class="block text-gray-700 text-sm font-bold mb-2">Expected Delivery Date (Optional):</label>
@@ -117,7 +123,8 @@
 
             <h4 class="text-lg font-semibold mb-3">Order Items:</h4>
             <div id="orderItemsContainer" class="space-y-4 mb-4 border p-4 rounded-md bg-gray-50">
-                </div>
+                <!-- Dynamic order items will be added here -->
+            </div>
             <button type="button" id="addItemBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md mb-4 flex items-center">
                 <i class="fas fa-plus mr-2"></i> Add Item
             </button>
@@ -134,6 +141,7 @@
     </div>
 </div>
 
+<!-- Record Payment Modal -->
 <div id="recordPaymentModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl overflow-y-auto max-h-[90vh]">
         <h3 class="text-xl font-bold mb-4">Record Payment to Supplier</h3>
@@ -143,7 +151,8 @@
                 <select id="paymentSupplierSelect" name="supplier_id" required
                         class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <option value="">Select a Supplier</option>
-                    </select>
+                    <!-- Options will be loaded via JavaScript -->
+                </select>
             </div>
 
             <div class="mb-4">
@@ -171,7 +180,8 @@
             <h4 class="text-lg font-semibold mb-3">Associate with Outstanding Orders:</h4>
             <div id="outstandingOrdersContainer" class="space-y-2 mb-4 border p-4 rounded-md bg-gray-50">
                 <p id="noOutstandingOrdersMsg" class="text-gray-500">Select a supplier to see outstanding credit orders.</p>
-                </div>
+                <!-- Checkboxes for outstanding orders will be loaded here -->
+            </div>
             
             <div class="flex justify-end space-x-2">
                 <button type="button" id="cancelPaymentBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>

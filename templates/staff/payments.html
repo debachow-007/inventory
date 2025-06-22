@@ -1,0 +1,56 @@
+{% extends 'staff/base.html' %}
+
+{% block title %}Payments{% endblock title %}
+{% block page_heading %}View Payments{% endblock page_heading %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-md">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">All Payments</h2>
+        {# Removed: Record Payment Button for staff #}
+    </div>
+
+    <div class="overflow-x-auto">
+        <table id="paymentsTable" class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Associated Orders</th>
+                    {# Removed: Actions column for staff #}
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for payment in payments %}
+                <tr data-id="{{ payment.id }}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ payment.id }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ payment.supplier.name if payment.supplier else 'N/A' }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">€{{ "%.2f"|format(payment.amount) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm capitalize">{{ payment.payment_method }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if payment.orders %}
+                            {% for order in payment.orders %}
+                                #{{ order.id }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Staff can only view, not add/delete payments from this page
+    // The payment modal and its JS from admin/orders.html are not relevant here.
+    // If staff needs to record payments, the modal and JS from admin/payments.html can be copied.
+    // For now, assuming only viewing.
+</script>
+{% endblock content %}
