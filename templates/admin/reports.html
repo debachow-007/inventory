@@ -1,0 +1,326 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Reports & Analytics{% endblock title %}
+{% block page_heading %}Reports & Analytics{% endblock page_heading %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stock Movement Trends -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold text-gray-800 mb-4">Stock Movement Trends (Monthly)</h3>
+        <div class="chart-container" style="position: relative; height:400px; width:100%">
+            <canvas id="stockMovementChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Top/Slow-Moving Items -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">Top 10 Moving Items</h3>
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="topMovingItemsChart"></canvas>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">Slow 10 Moving Items</h3>
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="slowMovingItemsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly/Quarterly Expenses -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold text-gray-800 mb-4">Total Expenses Over Time</h3>
+        <div class="mb-4">
+            <label for="expenseInterval" class="block text-gray-700 text-sm font-bold mb-2">Aggregate By:</label>
+            <select id="expenseInterval"
+                    class="shadow appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="month">Month</option>
+                <option value="quarter">Quarter</option>
+            </select>
+        </div>
+        <div class="chart-container" style="position: relative; height:400px; width:100%">
+            <canvas id="expensesChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Historical Transfers for Auditing -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-xl font-semibold text-gray-800 mb-4">Recent Stock Transfers (Auditing Log)</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Good</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="historicalTransfersTableBody">
+                    <!-- Data will be loaded here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}"; // Ensure correct API prefix
+
+        // --- Chart Instances ---
+        let stockMovementChart;
+        let topMovingItemsChart;
+        let slowMovingItemsChart;
+        let expensesChart;
+
+        // --- Stock Movement Chart ---
+        async function loadStockMovementChart() {
+            try {
+                const response = await fetch(`${apiPrefix}/reports/stock_movement`);
+                if (!response.ok) throw new Error('Failed to fetch stock movement data');
+                const data = await response.json();
+
+                const ctx = document.getElementById('stockMovementChart').getContext('2d');
+                if (stockMovementChart) stockMovementChart.destroy(); // Destroy previous instance
+                stockMovementChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: data.datasets.map(dataset => ({
+                            ...dataset,
+                            tension: 0.1,
+                            borderWidth: 2
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Stock Movements'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Quantity'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Month'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading Stock Movement Chart:', error);
+                document.getElementById('stockMovementChart').closest('.bg-white').innerHTML = `<p class="text-red-500">Error loading Stock Movement Chart: ${error.message}</p>`;
+            }
+        }
+
+        // --- Top/Slow Moving Items Charts ---
+        async function loadItemMovementCharts() {
+            try {
+                const response = await fetch(`${apiPrefix}/reports/item_movement`);
+                if (!response.ok) throw new Error('Failed to fetch item movement data');
+                const data = await response.json();
+
+                // Top Moving
+                const topLabels = data.top_moving.map(item => item.name);
+                const topData = data.top_moving.map(item => item.quantity);
+                const topCtx = document.getElementById('topMovingItemsChart').getContext('2d');
+                if (topMovingItemsChart) topMovingItemsChart.destroy();
+                topMovingItemsChart = new Chart(topCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: topLabels,
+                        datasets: [{
+                            label: 'Quantity Transferred Out',
+                            data: topData,
+                            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Top Moving Items (Quantity Out)'
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Quantity'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Slow Moving
+                const slowLabels = data.slow_moving.map(item => item.name);
+                const slowData = data.slow_moving.map(item => item.quantity);
+                const slowCtx = document.getElementById('slowMovingItemsChart').getContext('2d');
+                if (slowMovingItemsChart) slowMovingItemsChart.destroy();
+                slowMovingItemsChart = new Chart(slowCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: slowLabels,
+                        datasets: [{
+                            label: 'Quantity Transferred Out',
+                            data: slowData,
+                            backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Slow Moving Items (Quantity Out)'
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Quantity'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading Item Movement Charts:', error);
+                document.getElementById('topMovingItemsChart').closest('.bg-white').innerHTML = `<p class="text-red-500">Error loading Item Movement Charts: ${error.message}</p>`;
+                document.getElementById('slowMovingItemsChart').closest('.bg-white').innerHTML = ``; // Clear slow moving error
+            }
+        }
+
+        // --- Expenses Chart ---
+        const expenseIntervalSelect = document.getElementById('expenseInterval');
+        async function loadExpensesChart() {
+            const interval = expenseIntervalSelect.value;
+            try {
+                const response = await fetch(`${apiPrefix}/reports/monthly_expenses?interval=${interval}`);
+                if (!response.ok) throw new Error('Failed to fetch expenses data');
+                const data = await response.json();
+
+                const ctx = document.getElementById('expensesChart').getContext('2d');
+                if (expensesChart) expensesChart.destroy();
+                expensesChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: data.datasets.map(dataset => ({
+                            ...dataset,
+                            tension: 0.1,
+                            borderWidth: 2
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Total Expenses (${interval.charAt(0).toUpperCase() + interval.slice(1)})`
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Amount (€)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Period'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading Expenses Chart:', error);
+                document.getElementById('expensesChart').closest('.bg-white').innerHTML = `<p class="text-red-500">Error loading Expenses Chart: ${error.message}</p>`;
+            }
+        }
+        expenseIntervalSelect.addEventListener('change', loadExpensesChart);
+
+
+        // --- Historical Transfers Table ---
+        async function loadHistoricalTransfers() {
+            try {
+                const response = await fetch(`${apiPrefix}/reports/historical_transfers`);
+                if (!response.ok) throw new Error('Failed to fetch historical transfers data');
+                const transfers = await response.json();
+
+                const tableBody = document.getElementById('historicalTransfersTableBody');
+                tableBody.innerHTML = ''; // Clear existing rows
+
+                if (transfers.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No recent transfers found.</td></tr>`;
+                    return;
+                }
+
+                transfers.forEach(transfer => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(transfer.transfer_date).toLocaleString()}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.good_name} (${transfer.good_unit})</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.quantity}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.transfer_type.charAt(0).toUpperCase() + transfer.transfer_type.slice(1)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.user_username || 'System'}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500 truncate max-w-xs">${transfer.notes || 'N/A'}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading Historical Transfers:', error);
+                document.getElementById('historicalTransfersTableBody').closest('.bg-white').innerHTML = `<p class="text-red-500">Error loading Historical Transfers: ${error.message}</p>`;
+            }
+        }
+
+        // --- Initial Load All Reports ---
+        loadStockMovementChart();
+        loadItemMovementCharts();
+        loadExpensesChart();
+        loadHistoricalTransfers();
+    });
+</script>
+{% endblock content %}

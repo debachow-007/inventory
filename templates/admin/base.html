@@ -37,6 +37,16 @@
                     </a>
                 </li>
                 <li class="mb-2">
+                    <a href="{{ url_for('admin.suppliers') }}" class="flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
+                        <i class="fas fa-truck mr-3"></i> Suppliers
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('admin.users') }}" class="flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
+                        <i class="fas fa-users mr-3"></i> Users
+                    </a>
+                </li>
+                <li class="mb-2">
                     <a href="{{ url_for('admin.payments') }}" class="flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
                         <i class="fas fa-credit-card mr-3"></i> Payments
                     </a>
@@ -52,13 +62,8 @@
                     </a>
                 </li>
                 <li class="mb-2">
-                    <a href="{{ url_for('admin.suppliers') }}" class="flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
-                        <i class="fas fa-truck mr-3"></i> Suppliers
-                    </a>
-                </li>
-                <li class="mb-2">
-                    <a href="{{ url_for('admin.users') }}" class="flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
-                        <i class="fas fa-users mr-3"></i> Users
+                    <a href="{{ url_for('admin.reports') }}" class="flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
+                        <i class="fas fa-chart-line mr-3"></i> Reports
                     </a>
                 </li>
             </ul>

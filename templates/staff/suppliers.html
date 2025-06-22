@@ -1,7 +1,7 @@
-{% extends 'admin/base.html' %}
+{% extends 'staff/base.html' %}
 
 {% block title %}Suppliers{% endblock title %}
-{% block page_heading %}Manage Suppliers{% endblock page_heading %}
+{% block page_heading %}View Suppliers{% endblock page_heading %}
 
 {% block content %}
 <div class="bg-white p-6 rounded-lg shadow-md">
@@ -10,9 +10,7 @@
         <div class="flex items-center space-x-4">
             <input type="text" id="searchInput" placeholder="Search suppliers..."
                    class="shadow appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            <button id="addSupplierBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
-                Add New Supplier
-            </button>
+            {# Staff cannot add suppliers #}
         </div>
     </div>
 
@@ -47,59 +45,10 @@
     </div>
 </div>
 
-<!-- Add/Edit Supplier Modal -->
-<div id="supplierModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
-    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-        <h3 id="modalTitle" class="text-xl font-bold mb-4">Add New Supplier</h3>
-        <form id="supplierForm">
-            <input type="hidden" id="supplierId">
-            <div class="mb-4">
-                <label for="supplierName" class="block text-gray-700 text-sm font-bold mb-2">Name:</label>
-                <input type="text" id="supplierName" name="name" required
-                       class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            </div>
-            <div class="mb-4">
-                <label for="supplierContactPerson" class="block text-gray-700 text-sm font-bold mb-2">Contact Person:</label>
-                <input type="text" id="supplierContactPerson" name="contact_person"
-                       class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            </div>
-            <div class="mb-4">
-                <label for="supplierPhone" class="block text-gray-700 text-sm font-bold mb-2">Phone:</label>
-                <input type="text" id="supplierPhone" name="phone"
-                       class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            </div>
-            <div class="mb-4">
-                <label for="supplierEmail" class="block text-gray-700 text-sm font-bold mb-2">Email:</label>
-                <input type="email" id="supplierEmail" name="email"
-                       class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            </div>
-            <div class="mb-4">
-                <label for="supplierAddress" class="block text-gray-700 text-sm font-bold mb-2">Address:</label>
-                <textarea id="supplierAddress" name="address" rows="2"
-                          class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
-            </div>
-            <div class="flex justify-end space-x-2">
-                <button type="button" id="cancelSupplierBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Save</button>
-            </div>
-        </form>
-    </div>
-</div>
-
+{# Modals are not needed for staff supplier view as they can't add/edit #}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const suppliersTableBody = document.getElementById('suppliersTableBody');
-        const addSupplierBtn = document.getElementById('addSupplierBtn');
-        const supplierModal = document.getElementById('supplierModal');
-        const cancelSupplierBtn = document.getElementById('cancelSupplierBtn');
-        const supplierForm = document.getElementById('supplierForm');
-        const supplierIdInput = document.getElementById('supplierId');
-        const supplierNameInput = document.getElementById('supplierName');
-        const supplierContactPersonInput = document.getElementById('supplierContactPerson');
-        const supplierPhoneInput = document.getElementById('supplierPhone');
-        const supplierEmailInput = document.getElementById('supplierEmail');
-        const supplierAddressInput = document.getElementById('supplierAddress');
-        const modalTitle = document.getElementById('modalTitle');
         const searchInput = document.getElementById('searchInput');
         const sortButtons = document.querySelectorAll('.sort-btn');
 
@@ -157,8 +106,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="address">${supplier.address || 'N/A'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">€${supplier.outstanding_amount.toFixed(2)}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="edit-btn text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900">Delete</button>
+                        {# Staff cannot edit/delete suppliers #}
                     </td>
                 `;
                 suppliersTableBody.appendChild(row);
@@ -214,103 +162,12 @@
         });
 
 
-        // Open Add Modal
-        addSupplierBtn.addEventListener('click', () => {
-            modalTitle.textContent = 'Add New Supplier';
-            supplierForm.reset();
-            supplierIdInput.value = '';
-            supplierModal.classList.remove('hidden');
-        });
-
-        // Close Modal
-        cancelSupplierBtn.addEventListener('click', () => {
-            supplierModal.classList.add('hidden');
-        });
-
-        // Handle Add/Edit Form Submission
-        supplierForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const id = supplierIdInput.value;
-            const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
-            const url = id ? `${apiPrefix}/suppliers/${id}` : `${apiPrefix}/suppliers`;
-            const method = id ? 'PUT' : 'POST';
-
-            const data = {
-                name: supplierNameInput.value,
-                contact_person: supplierContactPersonInput.value || null,
-                phone: supplierPhoneInput.value || null,
-                email: supplierEmailInput.value || null,
-                address: supplierAddressInput.value || null
-            };
-
-            try {
-                const response = await fetch(url, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to save supplier');
-                }
-
-                alert('Supplier saved successfully!');
-                supplierModal.classList.add('hidden');
-                fetchSuppliersAndRenderTable(); // Re-fetch and render table
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        });
-
-        // Handle Edit/Delete/View Orders Buttons (event delegation)
+        // Handle View Orders Buttons (event delegation)
         suppliersTableBody.addEventListener('click', async (e) => {
             const row = e.target.closest('tr');
             if (!row) return;
 
-            if (e.target.classList.contains('edit-btn')) {
-                modalTitle.textContent = 'Edit Supplier';
-                const id = row.dataset.id;
-                
-                try {
-                    const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
-                    const response = await fetch(`${apiPrefix}/suppliers/${id}`);
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch supplier data');
-                    }
-                    const supplier = await response.json();
-                    
-                    supplierIdInput.value = supplier.id;
-                    supplierNameInput.value = supplier.name;
-                    supplierContactPersonInput.value = supplier.contact_person || '';
-                    supplierPhoneInput.value = supplier.phone || '';
-                    supplierEmailInput.value = supplier.email || '';
-                    supplierAddressInput.value = supplier.address || '';
-                    supplierModal.classList.remove('hidden');
-
-                } catch (error) {
-                    alert('Error: ' + error.message);
-                }
-
-            } else if (e.target.classList.contains('delete-btn')) {
-                if (confirm('Are you sure you want to delete this supplier? This will also affect associated orders.')) {
-                    const id = row.dataset.id;
-                    try {
-                        const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
-                        const response = await fetch(`${apiPrefix}/suppliers/${id}`, {
-                            method: 'DELETE'
-                        });
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.error || 'Failed to delete supplier');
-                        }
-                        alert('Supplier deleted successfully!');
-                        fetchSuppliersAndRenderTable(); // Re-fetch and render table
-                    } catch (error) {
-                        alert('Error: ' + error.message);
-                    }
-                }
-            } else if (e.target.classList.contains('view-orders-btn')) {
+            if (e.target.classList.contains('view-orders-btn')) {
                 const supplierId = e.target.dataset.supplierId;
                 const supplierName = e.target.dataset.supplierName;
                 const ordersRow = document.getElementById(`supplier-orders-row-${supplierId}`);
@@ -383,3 +240,4 @@
         });
     });
 </script>
+{% endblock content %}

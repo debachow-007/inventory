@@ -8,13 +8,25 @@
     <!-- Low Stock Items Card -->
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h3 class="text-lg font-semibold text-gray-800 mb-4">Low Stock Items</h3>
-        <ul class="space-y-2">
+        <ul class="space-y-2" id="lowStockItemsList">
             {% set low_stock_found = false %}
             {% for item in inventory_items %}
                 {% if item.current_stock_quantity < item.reorder_level %}
-                    <li class="flex justify-between items-center bg-red-100 p-3 rounded-md text-sm text-red-800 font-medium">
-                        <span>{{ item.name }}</span>
-                        <span>{{ item.current_stock_quantity }} {{ item.unit }} (Reorder: {{ item.reorder_level }} {{ item.unit }})</span>
+                    <li class="p-3 rounded-md text-sm text-red-800 font-medium border border-red-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <span>{{ item.name }}</span>
+                            <span class="text-xs">
+                                {{ item.current_stock_quantity }} {{ item.unit }} (Reorder: {{ item.reorder_level }} {{ item.unit }})
+                            </span>
+                        </div>
+                        <div class="flex justify-end">
+                            <button class="view-batches-btn bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-md text-xs" data-good-id="{{ item.id }}">
+                                View Batches
+                            </button>
+                        </div>
+                        <div id="batches-subtable-{{ item.id }}" class="hidden mt-2 border-t border-red-300 pt-2">
+                            <!-- Batches will be loaded here -->
+                        </div>
                     </li>
                     {% set low_stock_found = true %}
                 {% endif %}
@@ -88,6 +100,74 @@
         </div>
     </div>
 
-    <!-- Add more admin-specific cards here if needed -->
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const lowStockItemsList = document.getElementById('lowStockItemsList');
+
+        lowStockItemsList.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('view-batches-btn')) {
+                const goodId = e.target.dataset.goodId;
+                const subtableDiv = document.getElementById(`batches-subtable-${goodId}`);
+                const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+
+                if (subtableDiv.classList.contains('hidden')) {
+                    // Show batches
+                    subtableDiv.innerHTML = '<p class="text-gray-500">Loading batches...</p>';
+                    subtableDiv.classList.remove('hidden');
+                    e.target.textContent = 'Hide Batches';
+
+                    try {
+                        const response = await fetch(`${apiPrefix}/goods/${goodId}/batches`);
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch batches');
+                        }
+                        const batches = await response.json();
+
+                        let batchesHtml = '';
+                        if (batches.length > 0) {
+                            batchesHtml = `
+                                <table class="min-w-full text-xs bg-gray-50 rounded-md">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-2 py-1 text-left text-gray-600">Batch #</th>
+                                            <th class="px-2 py-1 text-left text-gray-600">Qty</th>
+                                            <th class="px-2 py-1 text-left text-gray-600">Expiry Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            `;
+                            batches.forEach(batch => {
+                                batchesHtml += `
+                                    <tr>
+                                        <td class="px-2 py-1 whitespace-nowrap">${batch.batch_number}</td>
+                                        <td class="px-2 py-1 whitespace-nowrap">${batch.quantity}</td>
+                                        <td class="px-2 py-1 whitespace-nowrap">${batch.expiry_date || 'N/A'}</td>
+                                    </tr>
+                                `;
+                            });
+                            batchesHtml += `
+                                    </tbody>
+                                </table>
+                            `;
+                        } else {
+                            batchesHtml = '<p class="text-gray-500">No batches found for this item.</p>';
+                        }
+                        subtableDiv.innerHTML = batchesHtml;
+
+                    } catch (error) {
+                        subtableDiv.innerHTML = `<p class="text-red-500">Error loading batches: ${error.message}</p>`;
+                        console.error('Error fetching batches:', error);
+                    }
+                } else {
+                    // Hide batches
+                    subtableDiv.classList.add('hidden');
+                    subtableDiv.innerHTML = ''; // Clear content when hidden
+                    e.target.textContent = 'View Batches';
+                }
+            }
+        });
+    });
+</script>
 {% endblock content %}

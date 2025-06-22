@@ -132,6 +132,8 @@
             goods.forEach(good => {
                 const row = document.createElement('tr');
                 row.dataset.id = good.id;
+                // Store good name in dataset for easy access when opening batches sub-table
+                row.dataset.goodName = good.name;
                 row.innerHTML = `
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${good.id}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="name">${good.name}</td>
@@ -140,10 +142,20 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="reorder_level">${good.reorder_level}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button class="edit-btn text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900">Delete</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900 mr-2">Delete</button>
+                        <button class="view-batches-btn bg-gray-200 hover:bg-gray-300 text-gray-800 py-1 px-3 rounded-md text-xs" data-good-id="${good.id}" data-row-id="${good.id}">
+                            View Batches
+                        </button>
                     </td>
                 `;
                 inventoryTableBody.appendChild(row);
+
+                // Add a hidden row for batches sub-table
+                const batchesRow = document.createElement('tr');
+                batchesRow.id = `batches-row-${good.id}`;
+                batchesRow.classList.add('hidden', 'bg-gray-50', 'border-t', 'border-gray-200');
+                batchesRow.innerHTML = `<td colspan="6" class="p-4"><div id="batches-content-${good.id}"></div></td>`;
+                inventoryTableBody.appendChild(batchesRow);
             });
         }
 
@@ -239,37 +251,38 @@
             }
         });
 
-        // Handle Edit/Delete Buttons (event delegation)
+        // Handle Edit/Delete/View Batches Buttons (event delegation)
         inventoryTableBody.addEventListener('click', async (e) => {
-            if (e.target.classList.contains('edit-btn')) {
+            const target = e.target;
+            const row = target.closest('tr');
+            if (!row) return; // Click was not on a row
+
+            const id = row.dataset.id;
+            const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+
+            if (target.classList.contains('edit-btn')) {
                 modalTitle.textContent = 'Edit Good';
-                const row = e.target.closest('tr');
-                const id = row.dataset.id;
                 
                 try {
-                    const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
                     const response = await fetch(`${apiPrefix}/goods/${id}`);
                     if (!response.ok) {
                         throw new Error('Failed to fetch good data');
                     }
-                    const good = await response.json();
+                    const goodData = await response.json(); // Renamed to avoid conflict
                     
-                    goodIdInput.value = good.id;
-                    goodNameInput.value = good.name;
-                    goodUnitInput.value = good.unit;
-                    goodReorderLevelInput.value = good.reorder_level;
+                    goodIdInput.value = goodData.id;
+                    goodNameInput.value = goodData.name;
+                    goodUnitInput.value = goodData.unit;
+                    goodReorderLevelInput.value = goodData.reorder_level;
                     goodModal.classList.remove('hidden');
 
                 } catch (error) {
                     alert('Error: ' + error.message);
                 }
 
-            } else if (e.target.classList.contains('delete-btn')) {
+            } else if (target.classList.contains('delete-btn')) {
                 if (confirm('Are you sure you want to delete this good? This will also delete associated batches, order details, and transfers.')) {
-                    const row = e.target.closest('tr');
-                    const id = row.dataset.id;
                     try {
-                        const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
                         const response = await fetch(`${apiPrefix}/goods/${id}`, {
                             method: 'DELETE'
                         });
@@ -282,6 +295,69 @@
                     } catch (error) {
                         alert('Error: ' + error.message);
                     }
+                }
+            } else if (target.classList.contains('view-batches-btn')) {
+                const goodId = target.dataset.goodId;
+                const goodName = row.dataset.goodName; // Get good name from row's dataset
+                const batchesRow = document.getElementById(`batches-row-${goodId}`);
+                const batchesContentDiv = document.getElementById(`batches-content-${goodId}`);
+
+                if (batchesRow.classList.contains('hidden')) {
+                    // Show batches
+                    batchesContentDiv.innerHTML = '<p class="text-gray-500">Loading batches...</p>';
+                    batchesRow.classList.remove('hidden');
+                    target.textContent = 'Hide Batches';
+
+                    try {
+                        const response = await fetch(`${apiPrefix}/goods/${goodId}/batches`);
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch batches');
+                        }
+                        const batches = await response.json();
+
+                        let batchesHtml = '';
+                        if (batches.length > 0) {
+                            batchesHtml = `
+                                <h4 class="text-md font-semibold text-gray-700 mb-2">Batches for ${goodName}</h4>
+                                <table class="min-w-full text-sm bg-white rounded-md border border-gray-200">
+                                    <thead>
+                                        <tr class="bg-gray-100">
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase">Batch #</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase">Quantity</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase">Purchase Date</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase">Expiry Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                            `;
+                            batches.forEach(batch => {
+                                batchesHtml += `
+                                    <tr class="border-b border-gray-100 last:border-b-0">
+                                        <td class="px-4 py-2 whitespace-nowrap">${batch.batch_number}</td>
+                                        <td class="px-4 py-2 whitespace-nowrap">${batch.quantity}</td>
+                                        <td class="px-4 py-2 whitespace-nowrap">${batch.purchase_date || 'N/A'}</td>
+                                        <td class="px-4 py-2 whitespace-nowrap">${batch.expiry_date || 'N/A'}</td>
+                                    </tr>
+                                `;
+                            });
+                            batchesHtml += `
+                                    </tbody>
+                                </table>
+                            `;
+                        } else {
+                            batchesHtml = '<p class="text-gray-500">No batches found for this item.</p>';
+                        }
+                        batchesContentDiv.innerHTML = batchesHtml;
+
+                    } catch (error) {
+                        batchesContentDiv.innerHTML = `<p class="text-red-500">Error loading batches: ${error.message}</p>`;
+                        console.error('Error fetching batches:', error);
+                    }
+                } else {
+                    // Hide batches
+                    batchesRow.classList.add('hidden');
+                    batchesContentDiv.innerHTML = ''; // Clear content when hidden
+                    target.textContent = 'View Batches';
                 }
             }
         });
