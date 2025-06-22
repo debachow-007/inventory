@@ -7,7 +7,9 @@
 <div class="bg-white p-6 rounded-lg shadow-md">
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-semibold text-gray-800">All Orders</h2>
-        <div class="space-x-2">
+        <div class="flex items-center space-x-4">
+            <input type="text" id="searchInput" placeholder="Search orders..."
+                   class="shadow appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
             <button id="addOrderBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
                 Place New Order
             </button>
@@ -22,55 +24,45 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order Date</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="order_date">Order Date <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="supplier_name">Supplier <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="total_amount">Total Amount <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="status">Status <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="payment_method">Payment <i class="fas fa-sort ml-1"></i></button>
+                    </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for order in orders %}
-                <tr data-id="{{ order.id }}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ order.id }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.order_date.strftime('%Y-%m-%d') }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.supplier.name if order.supplier else 'N/A' }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">€{{ "%.2f"|format(order.total_amount) }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                            {% if order.status == 'pending' %}bg-yellow-100 text-yellow-800
-                            {% elif order.status == 'completed' %}bg-green-100 text-green-800
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ order.status.capitalize() }}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{{ order.payment_method }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="view-details-btn text-blue-600 hover:text-blue-900 mr-2">View Details</button>
-                        {% if order.status == 'pending' %}
-                        <button class="complete-order-btn bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded-md text-xs">Complete</button>
-                        {% endif %}
-                        <button class="delete-btn text-red-600 hover:text-red-900 ml-2">Delete</button>
-                    </td>
-                </tr>
-                {% endfor %}
+            <tbody class="bg-white divide-y divide-gray-200" id="ordersTableBody">
+                <!-- Data will be loaded here by JavaScript -->
             </tbody>
         </table>
     </div>
 </div>
 
+<!-- Order Details Modal -->
 <div id="orderDetailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl">
         <h3 class="text-xl font-bold mb-4">Order Details #<span id="modalOrderId"></span></h3>
         <div id="orderDetailsContent" class="mb-4">
-            </div>
+            <!-- Details will be loaded here -->
+        </div>
         <div class="flex justify-end">
             <button type="button" id="closeOrderDetailsBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Close</button>
         </div>
     </div>
 </div>
 
+<!-- Complete Order Modal -->
 <div id="completeOrderModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-xl overflow-y-auto max-h-[90vh]">
         <h3 class="text-xl font-bold mb-4">Complete Order #<span id="completeModalOrderId"></span></h3>
@@ -88,7 +80,8 @@
 
             <h4 class="text-lg font-semibold mb-3">Items Received:</h4>
             <div id="itemsReceivedContainer" class="mb-4 space-y-4 border p-4 rounded-md bg-gray-50">
-                </div>
+                <!-- Order item details and batch inputs will be dynamically added here -->
+            </div>
             
             <div class="flex justify-end space-x-2">
                 <button type="button" id="cancelCompleteOrderBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
@@ -98,6 +91,7 @@
     </div>
 </div>
 
+<!-- Add New Order Modal -->
 <div id="newOrderModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl overflow-y-auto max-h-[90vh]">
         <h3 class="text-xl font-bold mb-4">Place New Order</h3>
@@ -107,7 +101,8 @@
                 <select id="newOrderSupplier" name="supplier_id" required
                         class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <option value="">Select a Supplier</option>
-                    </select>
+                    <!-- Options will be loaded via JavaScript -->
+                </select>
             </div>
             <div class="mb-4">
                 <label for="newOrderExpectedDelivery" class="block text-gray-700 text-sm font-bold mb-2">Expected Delivery Date (Optional):</label>
@@ -117,7 +112,8 @@
 
             <h4 class="text-lg font-semibold mb-3">Order Items:</h4>
             <div id="orderItemsContainer" class="space-y-4 mb-4 border p-4 rounded-md bg-gray-50">
-                </div>
+                <!-- Dynamic order items will be added here -->
+            </div>
             <button type="button" id="addItemBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md mb-4 flex items-center">
                 <i class="fas fa-plus mr-2"></i> Add Item
             </button>
@@ -134,6 +130,7 @@
     </div>
 </div>
 
+<!-- Record Payment Modal -->
 <div id="recordPaymentModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl overflow-y-auto max-h-[90vh]">
         <h3 class="text-xl font-bold mb-4">Record Payment to Supplier</h3>
@@ -143,7 +140,8 @@
                 <select id="paymentSupplierSelect" name="supplier_id" required
                         class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <option value="">Select a Supplier</option>
-                    </select>
+                    <!-- Options will be loaded via JavaScript -->
+                </select>
             </div>
 
             <div class="mb-4">
@@ -171,7 +169,8 @@
             <h4 class="text-lg font-semibold mb-3">Associate with Outstanding Orders:</h4>
             <div id="outstandingOrdersContainer" class="space-y-2 mb-4 border p-4 rounded-md bg-gray-50">
                 <p id="noOutstandingOrdersMsg" class="text-gray-500">Select a supplier to see outstanding credit orders.</p>
-                </div>
+                <!-- Checkboxes for outstanding orders will be loaded here -->
+            </div>
             
             <div class="flex justify-end space-x-2">
                 <button type="button" id="cancelPaymentBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
@@ -184,7 +183,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const ordersTable = document.getElementById('ordersTable');
+        const ordersTableBody = document.getElementById('ordersTableBody'); // Changed from ordersTable
         const orderDetailsModal = document.getElementById('orderDetailsModal');
         const modalOrderId = document.getElementById('modalOrderId');
         const orderDetailsContent = document.getElementById('orderDetailsContent');
@@ -193,8 +192,8 @@
         const completeOrderModal = document.getElementById('completeOrderModal');
         const completeModalOrderId = document.getElementById('completeModalOrderId');
         const completeOrderIdInput = document.getElementById('completeOrderId');
-        const itemsReceivedContainer = document.getElementById('itemsReceivedContainer'); // Renamed from batchInputContainer
-        const paymentMethodSelect = document.getElementById('paymentMethod'); // New select for cash/credit
+        const itemsReceivedContainer = document.getElementById('itemsReceivedContainer');
+        const paymentMethodSelect = document.getElementById('paymentMethod');
         const cancelCompleteOrderBtn = document.getElementById('cancelCompleteOrderBtn');
         const completeOrderForm = document.getElementById('completeOrderForm');
 
@@ -216,41 +215,123 @@
         const recordPaymentForm = document.getElementById('recordPaymentForm');
         const paymentSupplierSelect = document.getElementById('paymentSupplierSelect');
         const paymentAmountInput = document.getElementById('paymentAmountInput');
-        const paymentMethodFormSelect = document.getElementById('paymentMethodSelect'); // For record payment form
+        const paymentMethodFormSelect = document.getElementById('paymentMethodSelect');
         const paymentNotesTextarea = document.getElementById('paymentNotes');
         const outstandingOrdersContainer = document.getElementById('outstandingOrdersContainer');
         const noOutstandingOrdersMsg = document.getElementById('noOutstandingOrdersMsg');
 
+        // Search and Sort elements
+        const searchInput = document.getElementById('searchInput');
+        const sortButtons = document.querySelectorAll('.sort-btn');
 
         let allGoods = [];
         let allSuppliers = [];
+        let currentSearchQuery = '';
+        let currentSortBy = null;
+        let currentSortOrder = 'asc';
 
-        // Fetch initial data for dropdowns
-        async function fetchInitialData() {
+        // Debounce function for search input
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            };
+        }
+
+        async function fetchOrdersAndRenderTable() {
+            const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+            let url = `${apiPrefix}/orders?search=${encodeURIComponent(currentSearchQuery)}`;
+            if (currentSortBy) {
+                url += `&sort_by=${encodeURIComponent(currentSortBy)}&sort_order=${encodeURIComponent(currentSortOrder)}`;
+            }
+
             try {
-                // Determine which API route to use based on user role (assuming it's available in JS or fetched)
-                // For simplicity here, we will use admin api. For staff, the /staff/api routes would be used
-                // You might pass current_user.role to JS from Jinja for a more dynamic URL selection
-                const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch orders data');
+                }
+                const orders = await response.json();
+                renderOrdersTable(orders);
+                updateSortIcons();
+            } catch (error) {
+                alert('Error loading orders: ' + error.message);
+                console.error('Error fetching orders:', error);
+            }
+        }
 
+        function renderOrdersTable(orders) {
+            ordersTableBody.innerHTML = '';
+            if (orders.length === 0) {
+                ordersTableBody.innerHTML = `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">No orders found.</td></tr>`;
+                return;
+            }
+
+            orders.forEach(order => {
+                const row = document.createElement('tr');
+                row.dataset.id = order.id;
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.order_date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.supplier_name || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">€${order.total_amount.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : ''}
+                            ${order.status === 'completed' ? 'bg-green-100 text-green-800' : ''}
+                            ${order.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : ''}">
+                            ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">${order.payment_method}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="view-details-btn text-blue-600 hover:text-blue-900 mr-2">View Details</button>
+                        ${order.status === 'pending' ? `<button class="complete-order-btn bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded-md text-xs">Complete</button>` : ''}
+                        <button class="delete-btn text-red-600 hover:text-red-900 ml-2">Delete</button>
+                    </td>
+                `;
+                ordersTableBody.appendChild(row);
+            });
+        }
+
+        function updateSortIcons() {
+            sortButtons.forEach(button => {
+                const icon = button.querySelector('i');
+                icon.classList.remove('fa-sort-up', 'fa-sort-down');
+                icon.classList.add('fa-sort');
+
+                if (button.dataset.sortBy === currentSortBy) {
+                    if (currentSortOrder === 'asc') {
+                        icon.classList.remove('fa-sort');
+                        icon.classList.add('fa-sort-up');
+                    } else {
+                        icon.classList.remove('fa-sort');
+                        icon.classList.add('fa-sort-down');
+                    }
+                }
+            });
+        }
+
+        // Fetch initial data for dropdowns (goods and suppliers)
+        async function fetchDropdownData() {
+            try {
+                const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
                 const [goodsResponse, suppliersResponse] = await Promise.all([
                     fetch(`${apiPrefix}/goods`),
                     fetch(`${apiPrefix}/suppliers`)
                 ]);
 
                 if (!goodsResponse.ok || !suppliersResponse.ok) {
-                    throw new Error('Failed to fetch initial data.');
+                    throw new Error('Failed to fetch dropdown data.');
                 }
 
                 allGoods = await goodsResponse.json();
                 allSuppliers = await suppliersResponse.json();
 
-                populateSupplierSelect(newOrderSupplierSelect); // For new order modal
-                populateSupplierSelect(paymentSupplierSelect); // For payment modal
-                addNewOrderItem(); // Add initial item row for new order modal
             } catch (error) {
-                alert('Error loading initial data: ' + error.message);
-                console.error('Error fetching initial data:', error);
+                alert('Error loading dropdown data: ' + error.message);
+                console.error('Error fetching dropdown data:', error);
             }
         }
 
@@ -323,6 +404,29 @@
 
         // --- Event Listeners ---
 
+        // Initial data fetch and table render
+        fetchDropdownData().then(fetchOrdersAndRenderTable);
+
+        // Search input event listener with debounce
+        searchInput.addEventListener('input', debounce((e) => {
+            currentSearchQuery = e.target.value;
+            fetchOrdersAndRenderTable();
+        }, 300));
+
+        // Sort button event listeners
+        sortButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const sortBy = button.dataset.sortBy;
+                if (currentSortBy === sortBy) {
+                    currentSortOrder = (currentSortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                    currentSortBy = sortBy;
+                    currentSortOrder = 'asc';
+                }
+                fetchOrdersAndRenderTable();
+            });
+        });
+
         // Close Order Details Modal
         closeOrderDetailsBtn.addEventListener('click', () => {
             orderDetailsModal.classList.add('hidden');
@@ -338,7 +442,8 @@
         addOrderBtn.addEventListener('click', () => {
             newOrderForm.reset();
             orderItemsContainer.innerHTML = ''; // Clear previous items
-            fetchInitialData(); // Load suppliers and goods, and add initial item row
+            populateSupplierSelect(newOrderSupplierSelect); // Populate supplier dropdown
+            addNewOrderItem(); // Add initial item row
             newOrderModal.classList.remove('hidden');
         });
 
@@ -354,7 +459,7 @@
         recordPaymentBtn.addEventListener('click', () => {
             recordPaymentForm.reset();
             outstandingOrdersContainer.innerHTML = '';
-            noOutstandingOrdersMsg.classList.remove('hidden'); // Show initial message
+            noOutstandingOrdersMsg.classList.remove('hidden');
             populateSupplierSelect(paymentSupplierSelect); // Re-populate for fresh state
             recordPaymentModal.classList.remove('hidden');
         });
@@ -407,7 +512,7 @@
 
 
         // Handle Table Clicks (View Details, Complete, Delete)
-        ordersTable.addEventListener('click', async (e) => {
+        ordersTableBody.addEventListener('click', async (e) => { // Changed from ordersTable
             const row = e.target.closest('tr');
             if (!row) return;
             const orderId = row.dataset.id;
@@ -465,9 +570,7 @@
                     
                     if (order.details && order.details.length > 0) {
                         order.details.forEach(detail => {
-                            // Find the good to get its unit if needed for display
-                            const good = allGoods.find(g => g.id === detail.good_id);
-                            const goodUnit = good ? good.unit : 'units';
+                            const goodUnit = detail.good_unit || 'units';
 
                             itemsReceivedContainer.innerHTML += `
                                 <div class="bg-white p-3 rounded-md border border-gray-200">
@@ -516,7 +619,7 @@
                             throw new Error(errorData.error || 'Failed to delete order');
                         }
                         alert('Order deleted successfully!');
-                        row.remove(); // Remove row from table
+                        fetchOrdersAndRenderTable(); // Re-fetch and render table
                     } catch (error) {
                         alert('Error: ' + error.message);
                     }
@@ -528,7 +631,7 @@
         completeOrderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const orderId = completeOrderIdInput.value;
-            const receivedItems = itemsReceivedContainer.querySelectorAll('.bg-white'); // Get each item block
+            const receivedItems = itemsReceivedContainer.querySelectorAll('.bg-white');
             const batchesData = [];
             const paymentMethod = paymentMethodSelect.value;
 
@@ -556,7 +659,7 @@
 
                 alert('Order completed and inventory updated!');
                 completeOrderModal.classList.add('hidden');
-                location.reload(); // Reload to update order status
+                fetchOrdersAndRenderTable(); // Re-fetch and render table
             } catch (error) {
                 alert('Error: ' + error.message);
             }
@@ -606,7 +709,7 @@
                 expected_delivery_date: expectedDeliveryDate,
                 total_amount: totalOrderAmount,
                 details: orderDetails,
-                payment_method: 'credit' // New orders are initially credit. Payment can be recorded later.
+                payment_method: 'credit'
             };
 
             try {
@@ -624,7 +727,7 @@
 
                 alert('New order placed successfully!');
                 newOrderModal.classList.add('hidden');
-                location.reload();
+                fetchOrdersAndRenderTable(); // Re-fetch and render table
             } catch (error) {
                 alert('Error: ' + error.message);
             }
@@ -652,7 +755,7 @@
                 amount: amount,
                 payment_method: paymentMethod,
                 notes: notes,
-                order_ids: selectedOrderIds // Pass selected order IDs
+                order_ids: selectedOrderIds
             };
 
             try {
@@ -670,12 +773,11 @@
 
                 alert('Payment recorded successfully!');
                 recordPaymentModal.classList.add('hidden');
-                location.reload(); // Reload to update status if needed
+                fetchOrdersAndRenderTable(); // Re-fetch and render table (might not directly affect orders table, but good practice)
             } catch (error) {
                 alert('Error: ' + error.message);
             }
         });
-
     });
 </script>
 {% endblock content %}

@@ -1,0 +1,307 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Transfers{% endblock title %}
+{% block page_heading %}Manage Inventory Transfers{% endblock page_heading %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-md">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">All Transfers</h2>
+        <div class="flex items-center space-x-4">
+            <input type="text" id="searchInput" placeholder="Search transfers..."
+                   class="shadow appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <button id="addTransferBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                Record New Transfer
+            </button>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table id="transfersTable" class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="transfer_date">Date/Time <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="good_name">Good <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="quantity">Quantity <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="transfer_type">Type <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="user_username">Initiated By <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="transfersTableBody">
+                <!-- Data will be loaded here by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add New Transfer Modal -->
+<div id="transferModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+        <h3 class="text-xl font-bold mb-4">Record New Transfer</h3>
+        <form id="transferForm">
+            <div class="mb-4">
+                <label for="transferGood" class="block text-gray-700 text-sm font-bold mb-2">Good:</label>
+                <select id="transferGood" name="good_id" required
+                        class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">Select a Good</option>
+                    <!-- Options will be loaded via JavaScript -->
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="transferQuantity" class="block text-gray-700 text-sm font-bold mb-2">Quantity:</label>
+                <input type="number" step="0.01" id="transferQuantity" name="quantity" required min="0.01"
+                       class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <div class="mb-4">
+                <label for="transferType" class="block text-gray-700 text-sm font-bold mb-2">Transfer Type:</label>
+                <select id="transferType" name="transfer_type" required
+                        class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">Select Type</option>
+                    <option value="in">In (Addition to Stock)</option>
+                    <option value="out">Out (Deduction from Stock)</option>
+                    <option value="waste">Waste (Deduction from Stock)</option>
+                    <option value="consumption">Consumption (Deduction from Stock)</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="transferNotes" class="block text-gray-700 text-sm font-bold mb-2">Notes (Optional):</label>
+                <textarea id="transferNotes" name="notes" rows="3"
+                          class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" id="cancelTransferBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Record Transfer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const transfersTableBody = document.getElementById('transfersTableBody'); // Changed from transfersTable
+        const addTransferBtn = document.getElementById('addTransferBtn');
+        const transferModal = document.getElementById('transferModal');
+        const cancelTransferBtn = document.getElementById('cancelTransferBtn');
+        const transferForm = document.getElementById('transferForm');
+        const transferGoodSelect = document.getElementById('transferGood');
+        const transferQuantityInput = document.getElementById('transferQuantity');
+        const transferTypeSelect = document.getElementById('transferType');
+        const transferNotesInput = document.getElementById('transferNotes');
+
+        // Search and Sort elements
+        const searchInput = document.getElementById('searchInput');
+        const sortButtons = document.querySelectorAll('.sort-btn');
+
+        let allGoods = [];
+        let currentSearchQuery = '';
+        let currentSortBy = null;
+        let currentSortOrder = 'asc';
+
+        // Debounce function for search input
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            };
+        }
+
+        async function fetchTransfersAndRenderTable() {
+            const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}"; // Transfers are admin-only in backend, but keeping dynamic prefix for consistency
+            let url = `${apiPrefix}/transfers?search=${encodeURIComponent(currentSearchQuery)}`;
+            if (currentSortBy) {
+                url += `&sort_by=${encodeURIComponent(currentSortBy)}&sort_order=${encodeURIComponent(currentSortOrder)}`;
+            }
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch transfers data');
+                }
+                const transfers = await response.json();
+                renderTable(transfers);
+                updateSortIcons();
+            } catch (error) {
+                alert('Error loading transfers: ' + error.message);
+                console.error('Error fetching transfers:', error);
+            }
+        }
+
+        function renderTable(transfers) {
+            transfersTableBody.innerHTML = ''; // Clear existing rows
+            if (transfers.length === 0) {
+                transfersTableBody.innerHTML = `<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">No transfers found.</td></tr>`;
+                return;
+            }
+
+            transfers.forEach(transfer => {
+                const row = document.createElement('tr');
+                row.dataset.id = transfer.id;
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${transfer.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(transfer.transfer_date).toLocaleString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.good_name || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.quantity} ${transfer.good_unit || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm capitalize">${transfer.transfer_type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.notes || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${transfer.user_username || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="delete-btn text-red-600 hover:text-red-900">Delete</button>
+                    </td>
+                `;
+                transfersTableBody.appendChild(row);
+            });
+        }
+
+        function updateSortIcons() {
+            sortButtons.forEach(button => {
+                const icon = button.querySelector('i');
+                icon.classList.remove('fa-sort-up', 'fa-sort-down');
+                icon.classList.add('fa-sort');
+
+                if (button.dataset.sortBy === currentSortBy) {
+                    if (currentSortOrder === 'asc') {
+                        icon.classList.remove('fa-sort');
+                        icon.classList.add('fa-sort-up');
+                    } else {
+                        icon.classList.remove('fa-sort');
+                        icon.classList.add('fa-sort-down');
+                    }
+                }
+            });
+        }
+
+        // Fetch goods for the dropdown
+        async function fetchGoodsForDropdown() {
+            try {
+                const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+                const response = await fetch(`${apiPrefix}/goods`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch goods.');
+                }
+                allGoods = await response.json();
+                populateGoodSelect();
+            } catch (error) {
+                alert('Error loading goods for dropdown: ' + error.message);
+                console.error('Error fetching goods:', error);
+            }
+        }
+
+        function populateGoodSelect() {
+            transferGoodSelect.innerHTML = '<option value="">Select a Good</option>';
+            allGoods.forEach(good => {
+                const option = document.createElement('option');
+                option.value = good.id;
+                option.textContent = good.name + ' (' + good.unit + ')';
+                transferGoodSelect.appendChild(option);
+            });
+        }
+
+        // Initial fetch on page load
+        fetchTransfersAndRenderTable();
+        fetchGoodsForDropdown(); // Also fetch goods for the modal dropdown
+
+        // Search input event listener with debounce
+        searchInput.addEventListener('input', debounce((e) => {
+            currentSearchQuery = e.target.value;
+            fetchTransfersAndRenderTable();
+        }, 300));
+
+        // Sort button event listeners
+        sortButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const sortBy = button.dataset.sortBy;
+                if (currentSortBy === sortBy) {
+                    currentSortOrder = (currentSortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                    currentSortBy = sortBy;
+                    currentSortOrder = 'asc';
+                }
+                fetchTransfersAndRenderTable();
+            });
+        });
+
+        // Open Add Transfer Modal
+        addTransferBtn.addEventListener('click', () => {
+            transferForm.reset();
+            populateGoodSelect(); // Re-populate goods list for fresh modal
+            transferModal.classList.remove('hidden');
+        });
+
+        // Close Modal
+        cancelTransferBtn.addEventListener('click', () => {
+            transferModal.classList.add('hidden');
+        });
+
+        // Handle Add Transfer Form Submission
+        transferForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const data = {
+                good_id: parseInt(transferGoodSelect.value),
+                quantity: parseFloat(transferQuantityInput.value),
+                transfer_type: transferTypeSelect.value,
+                notes: transferNotesInput.value || null,
+            };
+
+            try {
+                const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+                const response = await fetch(`${apiPrefix}/transfers`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to record transfer');
+                }
+
+                alert('Transfer recorded successfully!');
+                transferModal.classList.add('hidden');
+                fetchTransfersAndRenderTable(); // Re-fetch and render table
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        // Handle Delete Transfer
+        transfersTableBody.addEventListener('click', async (e) => { // Changed from transfersTable
+            if (e.target.classList.contains('delete-btn')) {
+                if (confirm('Are you sure you want to delete this transfer? This action will attempt to revert the stock change.')) {
+                    const row = e.target.closest('tr');
+                    const id = row.dataset.id;
+                    try {
+                        const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+                        const response = await fetch(`${apiPrefix}/transfers/${id}`, {
+                            method: 'DELETE'
+                        });
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || 'Failed to delete transfer');
+                        }
+                        alert('Transfer deleted successfully!');
+                        fetchTransfersAndRenderTable(); // Re-fetch and render table
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock content %}

@@ -5,15 +5,41 @@
 
 {% block content %}
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    <!-- Pending Orders Card -->
+    <!-- Low Stock Items Card (Staff View) -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Low Stock Items</h3>
+        <ul class="space-y-2">
+            {% set low_stock_found = false %}
+            {# Assuming 'inventory_items' is passed to staff dashboard as well, if not, this section might need adjustment in app.py #}
+            {# For now, to make it work, I'll pass 'inventory_items' to staff dashboard as well in app.py for this section to function #}
+            {% for item in inventory_items %}
+                {% if item.current_stock_quantity < item.reorder_level %}
+                    <li class="flex justify-between items-center bg-red-100 p-3 rounded-md text-sm text-red-800 font-medium">
+                        <span>{{ item.name }}</span>
+                        <span>{{ item.current_stock_quantity }} {{ item.unit }} (Reorder: {{ item.reorder_level }} {{ item.unit }})</span>
+                    </li>
+                    {% set low_stock_found = true %}
+                {% endif %}
+            {% endfor %}
+            {% if not low_stock_found %}
+                <li class="text-gray-500">No items currently below reorder level.</li>
+            {% endif %}
+        </ul>
+        <div class="mt-4 text-right">
+            {# Staff might not have direct inventory page, so linking to orders/tasks might be more relevant if low stock means order action #}
+            <a href="{{ url_for('staff.orders') }}" class="text-blue-600 hover:underline text-sm">Place New Order</a>
+        </div>
+    </div>
+
+    <!-- Your Pending Orders Card -->
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h3 class="text-lg font-semibold text-gray-800 mb-4">Your Pending Orders</h3>
         {% if pending_orders %}
         <ul class="space-y-2">
             {% for order in pending_orders %}
-            <li class="flex justify-between items-center bg-gray-50 p-3 rounded-md text-sm">
+            <li class="flex justify-between items-center bg-yellow-100 p-3 rounded-md text-sm text-yellow-800">
                 <span>Order #{{ order.id }} ({{ order.supplier.name if order.supplier else 'N/A' }})</span>
-                <span class="font-medium text-yellow-600">{{ order.order_date.strftime('%Y-%m-%d') }}</span>
+                <span class="font-medium">{{ order.order_date.strftime('%Y-%m-%d') }}</span>
             </li>
             {% endfor %}
         </ul>
@@ -31,9 +57,9 @@
         {% if my_assigned_tasks %}
         <ul class="space-y-2">
             {% for task in my_assigned_tasks %}
-            <li class="flex justify-between items-center bg-gray-50 p-3 rounded-md text-sm">
+            <li class="flex justify-between items-center bg-blue-100 p-3 rounded-md text-sm text-blue-800">
                 <span>{{ task.title }}</span>
-                <span class="font-medium {% if task.status == 'pending' and task.due_date and task.due_date < now.date() %}text-red-600{% elif task.status == 'pending' %}text-yellow-600{% else %}text-gray-600{% endif %}">
+                <span class="font-medium {% if task.status == 'pending' and task.due_date and task.due_date < now.date() %}text-red-600{% elif task.status == 'pending' %}text-blue-600{% else %}text-gray-600{% endif %}">
                     Due: {{ task.due_date.strftime('%Y-%m-%d') if task.due_date else 'N/A' }}
                 </span>
             </li>
@@ -46,7 +72,5 @@
             <a href="{{ url_for('staff.tasks') }}" class="text-blue-600 hover:underline text-sm">View All Tasks</a>
         </div>
     </div>
-
-    <!-- Add more staff-specific cards here if needed -->
 </div>
 {% endblock content %}

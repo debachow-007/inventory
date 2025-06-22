@@ -4,6 +4,7 @@ from flask import Flask, render_template, redirect, url_for, flash, request, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import datetime
+from sqlalchemy import or_
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -78,6 +79,7 @@ class Supplier(db.Model):
     address = db.Column(db.String(200), nullable=True)
 
     orders = db.relationship('Order', backref='supplier', lazy=True)
+    payments = db.relationship('Payment', backref='supplier', lazy=True)
 
     def __repr__(self):
         return f'<Supplier {self.name}>'
@@ -91,7 +93,6 @@ class Order(db.Model):
     expected_delivery_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), default='pending') # e.g., 'pending', 'completed', 'cancelled'
     total_amount = db.Column(db.Float, default=0.0)
-    # New: Payment method for the entire order
     payment_method = db.Column(db.String(20), default='credit') # 'cash', 'credit'
 
     details = db.relationship('OrderDetail', backref='order', lazy=True, cascade="all, delete-orphan")
@@ -115,16 +116,15 @@ class OrderDetail(db.Model):
 class Payment(db.Model):
     __tablename__ = 'payments'
     id = db.Column(db.Integer, primary_key=True)
-    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False) # Payment made to which supplier
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
     payment_date = db.Column(db.Date, default=datetime.date.today)
     amount = db.Column(db.Float, nullable=False)
-    payment_method = db.Column(db.String(50), nullable=True) # e.g., 'cash', 'bank transfer'
+    payment_method = db.Column(db.String(50), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
         return f'<Payment ID: {self.id}, Supplier: {self.supplier.name}, Amount: {self.amount}>'
 
-# Association table for Payment and Order (Many-to-Many)
 order_payment_association = db.Table('order_payment_association',
     db.Column('order_id', db.Integer, db.ForeignKey('orders.id'), primary_key=True),
     db.Column('payment_id', db.Integer, db.ForeignKey('payments.id'), primary_key=True)
@@ -176,7 +176,7 @@ def login():
         if current_user.role == 'admin':
             return redirect(url_for('admin.dashboard'))
         else:
-            return redirect(url_for('staff.dashboard')) # Redirect non-admins to their dashboard
+            return redirect(url_for('staff.dashboard'))
 
     if request.method == 'POST':
         username = request.form['username']
@@ -196,7 +196,6 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    # Only allow registration if no users exist or by an admin
     if User.query.first() and not (current_user.is_authenticated and current_user.role == 'admin'):
         flash('Registration is currently disabled or requires admin.', 'danger')
         return redirect(url_for('login'))
@@ -204,7 +203,7 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        role = request.form.get('role', 'staff') # Default to staff for new registrations
+        role = request.form.get('role', 'staff')
 
         if User.query.filter_by(username=username).first():
             flash('Username already exists.', 'danger')
@@ -250,37 +249,36 @@ def dashboard():
                            inventory_items=inventory_items,
                            pending_orders=pending_orders,
                            upcoming_tasks=upcoming_tasks,
-                           expiring_batches=expiring_batches)
+                           expiring_batches=expiring_batches,
+                           now=datetime.datetime.now())
 
 @admin_bp.route('/inventory')
 def inventory():
-    goods = Good.query.all()
-    return render_template('admin/inventory.html', goods=goods)
+    return render_template('admin/inventory.html', goods=[])
 
 @admin_bp.route('/orders')
 def orders():
-    all_orders = Order.query.order_by(Order.order_date.desc()).all()
-    return render_template('admin/orders.html', orders=all_orders)
+    return render_template('admin/orders.html', orders=[])
 
 @admin_bp.route('/tasks')
 def tasks():
-    all_tasks = Task.query.order_by(Task.due_date.asc()).all()
-    return render_template('admin/tasks.html', tasks=all_tasks, users=User.query.all())
+    return render_template('admin/tasks.html', tasks=[], users=User.query.all())
 
 @admin_bp.route('/suppliers')
 def suppliers():
-    all_suppliers = Supplier.query.all()
-    return render_template('admin/suppliers.html', suppliers=all_suppliers)
+    return render_template('admin/suppliers.html', suppliers=[])
 
 @admin_bp.route('/users')
 def users():
-    all_users = User.query.all()
-    return render_template('admin/users.html', users=all_users)
+    return render_template('admin/users.html', users=[])
 
 @admin_bp.route('/payments')
 def payments():
-    all_payments = Payment.query.order_by(Payment.payment_date.desc()).all()
-    return render_template('admin/payments.html', payments=all_payments, suppliers=Supplier.query.all())
+    return render_template('admin/payments.html', payments=[], suppliers=Supplier.query.all())
+
+@admin_bp.route('/transfers')
+def transfers():
+    return render_template('admin/transfers.html', transfers=[], goods=Good.query.all(), users=User.query.all())
 
 
 # --- Blueprint for Staff/Non-Admin Features ---
@@ -289,52 +287,124 @@ staff_bp = Blueprint('staff', __name__, url_prefix='/staff')
 @staff_bp.before_request
 @login_required
 def staff_bp_before_request():
-    # Allow all logged-in users to access staff routes
     pass
 
 @staff_bp.route('/dashboard')
 def dashboard():
-    # Staff dashboard can be simpler or customized for staff needs
+    inventory_items = Good.query.order_by(Good.current_stock_quantity.asc()).limit(5).all() # Also pass for staff dashboard
     pending_orders = Order.query.filter_by(status='pending').order_by(Order.order_date.desc()).limit(5).all()
     my_assigned_tasks = Task.query.filter(
-        Task.assigned_to_id == current_user.id,
+        (Task.assigned_to_id == current_user.id) | (Task.created_by_id == current_user.id),
         Task.status != 'completed'
     ).order_by(Task.due_date.asc()).limit(5).all()
     
     return render_template('staff/dashboard.html',
+                           inventory_items=inventory_items, # Pass this
                            pending_orders=pending_orders,
-                           my_assigned_tasks=my_assigned_tasks)
+                           my_assigned_tasks=my_assigned_tasks,
+                           now=datetime.datetime.now())
+
+@staff_bp.route('/inventory')
+def inventory():
+    return render_template('staff/inventory.html', goods=[])
 
 @staff_bp.route('/orders')
 def orders():
-    # Staff can view and manage their own orders
-    all_orders = Order.query.order_by(Order.order_date.desc()).all() # Staff can view all orders for now
-    return render_template('staff/orders.html', orders=all_orders)
+    return render_template('staff/orders.html', orders=[])
 
 @staff_bp.route('/tasks')
 def tasks():
-    all_tasks = Task.query.filter(
-        (Task.assigned_to_id == current_user.id) | (Task.created_by_id == current_user.id) # Tasks assigned to or created by staff
-    ).order_by(Task.due_date.asc()).all()
-    return render_template('staff/tasks.html', tasks=all_tasks, users=User.query.all())
+    return render_template('staff/tasks.html', tasks=[], users=User.query.all())
 
 @staff_bp.route('/payments')
 def payments():
-    # Staff can view payments but likely not create/delete directly
-    all_payments = Payment.query.order_by(Payment.payment_date.desc()).all()
-    return render_template('staff/payments.html', payments=all_payments, suppliers=Supplier.query.all())
+    return render_template('staff/payments.html', payments=[], suppliers=Supplier.query.all())
 
 
 # --- API Endpoints for CRUD Operations (Generic) ---
-# These are protected by the blueprint's before_request based on the blueprint it's registered on
-
 def create_crud_endpoints(bp, model, name, allow_non_admin=False):
     # Get all items
     @bp.route(f'/api/{name}', methods=['GET'], endpoint=f'get_all_{name}')
     def get_all():
         if not allow_non_admin and current_user.role != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
-        items = model.query.all()
+        
+        search_query = request.args.get('search', '').strip()
+        sort_by = request.args.get('sort_by', None)
+        sort_order = request.args.get('sort_order', 'asc') # 'asc' or 'desc'
+
+        items_query = model.query
+
+        # Apply search filtering
+        if search_query:
+            search_filters = []
+            if model == Good:
+                search_filters.append(Good.name.ilike(f'%{search_query}%'))
+                search_filters.append(Good.unit.ilike(f'%{search_query}%'))
+            elif model == Order:
+                search_filters.append(Order.status.ilike(f'%{search_query}%'))
+                search_filters.append(Order.supplier.has(Supplier.name.ilike(f'%{search_query}%')))
+                search_filters.append(Order.details.any(OrderDetail.good.has(Good.name.ilike(f'%{search_query}%'))))
+            elif model == Supplier:
+                search_filters.append(Supplier.name.ilike(f'%{search_query}%'))
+                search_filters.append(Supplier.contact_person.ilike(f'%{search_query}%'))
+                search_filters.append(Supplier.email.ilike(f'%{search_query}%'))
+                search_filters.append(Supplier.phone.ilike(f'%{search_query}%'))
+                search_filters.append(Supplier.address.ilike(f'%{search_query}%'))
+            elif model == Task:
+                search_filters.append(Task.title.ilike(f'%{search_query}%'))
+                search_filters.append(Task.description.ilike(f'%{search_query}%'))
+                search_filters.append(Task.status.ilike(f'%{search_query}%'))
+                search_filters.append(Task.priority.ilike(f'%{search_query}%'))
+                search_filters.append(Task.assigned_user.has(User.username.ilike(f'%{search_query}%')))
+                search_filters.append(Task.created_by_user.has(User.username.ilike(f'%{search_query}%')))
+            elif model == Payment:
+                search_filters.append(Payment.payment_method.ilike(f'%{search_query}%'))
+                search_filters.append(Payment.notes.ilike(f'%{search_query}%'))
+                search_filters.append(Payment.supplier.has(Supplier.name.ilike(f'%{search_query}%')))
+            elif model == User:
+                search_filters.append(User.username.ilike(f'%{search_query}%'))
+                search_filters.append(User.role.ilike(f'%{search_query}%'))
+            elif model == Transfer:
+                search_filters.append(Transfer.transfer_type.ilike(f'%{search_query}%'))
+                search_filters.append(Transfer.notes.ilike(f'%{search_query}%'))
+                search_filters.append(Transfer.good.has(Good.name.ilike(f'%{search_query}%')))
+                search_filters.append(Transfer.user.has(User.username.ilike(f'%{search_query}%')))
+
+
+            if search_filters:
+                items_query = items_query.filter(or_(*search_filters))
+
+        # Apply sorting
+        if sort_by:
+            if model == Order and sort_by == 'supplier_name':
+                column = Supplier.name
+                items_query = items_query.join(Supplier)
+            elif model == Task and sort_by == 'assigned_to_username':
+                column = User.username
+                items_query = items_query.outerjoin(Task.assigned_user)
+            elif model == Task and sort_by == 'created_by_username':
+                column = User.username
+                items_query = items_query.join(Task.created_by_user)
+            elif model == Payment and sort_by == 'supplier_name':
+                column = Supplier.name
+                items_query = items_query.join(Supplier)
+            elif model == Transfer and sort_by == 'good_name':
+                column = Good.name
+                items_query = items_query.join(Good)
+            elif model == Transfer and sort_by == 'user_username':
+                column = User.username
+                items_query = items_query.join(User)
+            else:
+                column = getattr(model, sort_by, None)
+
+            if column:
+                if sort_order == 'desc':
+                    items_query = items_query.order_by(column.desc())
+                else:
+                    items_query = items_query.order_by(column.asc())
+
+        items = items_query.all()
         return jsonify([item.to_dict() if hasattr(item, 'to_dict') else item.__dict__ for item in items])
 
     # Get single item
@@ -353,43 +423,65 @@ def create_crud_endpoints(bp, model, name, allow_non_admin=False):
         
         data = request.json
         try:
-            if model == User: # Special handling for User model (password, role)
-                # Only admins can create admin users
+            if model == User:
                 if data.get('role') == 'admin' and current_user.role != 'admin':
                      return jsonify({'error': 'Only admins can create admin users.'}), 403
                 
                 new_item = model(username=data['username'], role=data.get('role', 'staff'))
                 new_item.set_password(data['password'])
-            elif model == Order: # Orders require user_id
+            elif model == Order:
                 new_item = model(user_id=current_user.id, **{k: v for k, v in data.items() if k != 'details'})
                 db.session.add(new_item)
-                db.session.flush() # Get ID for order details
+                db.session.flush()
 
                 for detail_data in data.get('details', []):
                     order_detail = OrderDetail(order_id=new_item.id, **detail_data)
                     db.session.add(order_detail)
-            elif model == Payment: # Payments require supplier_id and amount
+            elif model == Payment:
                 new_item = model(supplier_id=data['supplier_id'], amount=data['amount'],
                                 payment_method=data.get('payment_method'), notes=data.get('notes'))
                 db.session.add(new_item)
-                db.session.flush() # Get ID for association
+                db.session.flush()
                 
-                # Associate with orders if provided
                 for order_id in data.get('order_ids', []):
                     order = Order.query.get(order_id)
                     if order:
                         new_item.orders.append(order)
-            else: # Generic handling for other models
+            elif model == Transfer:
+                good = Good.query.get(data['good_id'])
+                if not good:
+                    raise ValueError(f"Good with ID {data['good_id']} not found.")
+
+                quantity = float(data['quantity'])
+                transfer_type = data['transfer_type']
+
+                if transfer_type in ['out', 'waste', 'consumption'] and good.current_stock_quantity < quantity:
+                    raise ValueError(f"Insufficient stock for {good.name}. Available: {good.current_stock_quantity} {good.unit}, Attempted: {quantity} {good.unit}")
+
+                new_item = model(
+                    user_id=current_user.id,
+                    good_id=data['good_id'],
+                    quantity=quantity,
+                    transfer_type=transfer_type,
+                    notes=data.get('notes')
+                )
+                db.session.add(new_item)
+
+                if transfer_type == 'in':
+                    good.current_stock_quantity += quantity
+                elif transfer_type in ['out', 'waste', 'consumption']:
+                    good.current_stock_quantity -= quantity
+            else:
                 new_item = model(**data)
             
-            if model != Order and model != Payment: # Already added above
+            if model not in [Order, Payment, Transfer]:
                 db.session.add(new_item)
             
             db.session.commit()
             return jsonify({'message': f'{name.capitalize()} added successfully', 'id': new_item.id}), 201
         except Exception as e:
             db.session.rollback()
-            print(f"Error adding {name}: {e}") # For debugging
+            print(f"Error adding {name}: {e}")
             return jsonify({'error': str(e)}), 400
 
     # Update item
@@ -401,21 +493,31 @@ def create_crud_endpoints(bp, model, name, allow_non_admin=False):
         item = model.query.get_or_404(item_id)
         data = request.json
         try:
-            for key, value in data.items():
-                if hasattr(item, key) and key != 'id': # Don't update ID
-                    if key == 'password' and model == User:
-                        item.set_password(value)
-                    elif isinstance(getattr(model, key).type, db.Date) and isinstance(value, str):
-                        setattr(item, key, datetime.datetime.strptime(value, '%Y-%m-%d').date())
-                    elif isinstance(getattr(model, key).type, db.DateTime) and isinstance(value, str):
-                        setattr(item, key, datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S'))
-                    else:
-                        setattr(item, key, value)
+            if model == Transfer:
+                flash("Directly updating transfers might not adjust stock automatically. Consider deleting and re-creating for accurate stock changes.", "warning")
+                updatable_fields = ['notes', 'transfer_date']
+                for key, value in data.items():
+                    if key in updatable_fields and hasattr(item, key) and key != 'id':
+                        if isinstance(getattr(model, key).type, db.DateTime) and isinstance(value, str):
+                            setattr(item, key, datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S'))
+                        else:
+                            setattr(item, key, value)
+            else:
+                for key, value in data.items():
+                    if hasattr(item, key) and key != 'id':
+                        if key == 'password' and model == User:
+                            item.set_password(value)
+                        elif isinstance(getattr(model, key).type, db.Date) and isinstance(value, str):
+                            setattr(item, key, datetime.datetime.strptime(value, '%Y-%m-%d').date())
+                        elif isinstance(getattr(model, key).type, db.DateTime) and isinstance(value, str):
+                            setattr(item, key, datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S'))
+                        else:
+                            setattr(item, key, value)
             db.session.commit()
             return jsonify({'message': f'{name.capitalize()} updated successfully'}), 200
         except Exception as e:
             db.session.rollback()
-            print(f"Error updating {name}: {e}") # For debugging
+            print(f"Error updating {name}: {e}")
             return jsonify({'error': str(e)}), 400
 
     # Delete item
@@ -425,12 +527,23 @@ def create_crud_endpoints(bp, model, name, allow_non_admin=False):
             return jsonify({'error': 'Admin access required'}), 403
         item = model.query.get_or_404(item_id)
         try:
+            if model == Transfer:
+                good = Good.query.get(item.good_id)
+                if good:
+                    if item.transfer_type == 'in':
+                        good.current_stock_quantity -= item.quantity
+                    elif item.transfer_type in ['out', 'waste', 'consumption']:
+                        good.current_stock_quantity += item.quantity
+                    db.session.add(good)
+                else:
+                    print(f"Warning: Good with ID {item.good_id} not found for transfer {item.id} during deletion.")
+
             db.session.delete(item)
             db.session.commit()
             return jsonify({'message': f'{name.capitalize()} deleted successfully'}), 200
         except Exception as e:
             db.session.rollback()
-            print(f"Error deleting {name}: {e}") # For debugging
+            print(f"Error deleting {name}: {e}")
             return jsonify({'error': str(e)}), 400
 
 # Add to_dict methods for models to easily jsonify them
@@ -453,13 +566,23 @@ def user_to_dict(self):
 User.to_dict = user_to_dict
 
 def supplier_to_dict(self):
+    total_credit_orders_amount = sum(
+        order.total_amount for order in self.orders
+        if order.status == 'completed' and order.payment_method == 'credit'
+    )
+    total_payments_amount = sum(payment.amount for payment in self.payments)
+    
+    outstanding_amount = total_credit_orders_amount - total_payments_amount
+    outstanding_amount = max(0, outstanding_amount) 
+
     return {
         'id': self.id,
         'name': self.name,
         'contact_person': self.contact_person,
         'phone': self.phone,
         'email': self.email,
-        'address': self.address
+        'address': self.address,
+        'outstanding_amount': outstanding_amount
     }
 Supplier.to_dict = supplier_to_dict
 
@@ -474,7 +597,7 @@ def order_to_dict(self):
         'expected_delivery_date': self.expected_delivery_date.isoformat() if self.expected_delivery_date else None,
         'status': self.status,
         'total_amount': self.total_amount,
-        'payment_method': self.payment_method, # Include payment method
+        'payment_method': self.payment_method,
         'details': [detail.to_dict() for detail in self.details] if self.details else []
     }
 Order.to_dict = order_to_dict
@@ -485,7 +608,7 @@ def order_detail_to_dict(self):
         'order_id': self.order_id,
         'good_id': self.good_id,
         'good_name': self.good.name if self.good else None,
-        'good_unit': self.good.unit if self.good else None, # Include good unit
+        'good_unit': self.good.unit if self.good else None,
         'quantity': self.quantity,
         'price_per_unit': self.price_per_unit,
         'total_price': self.total_price
@@ -513,7 +636,7 @@ def payment_to_dict(self):
         'amount': self.amount,
         'payment_method': self.payment_method,
         'notes': self.notes,
-        'associated_orders': [order.id for order in self.orders] # List of associated order IDs
+        'associated_orders': [order.id for order in self.orders]
     }
 Payment.to_dict = payment_to_dict
 
@@ -524,6 +647,7 @@ def transfer_to_dict(self):
         'user_username': self.user.username if self.user else None,
         'good_id': self.good_id,
         'good_name': self.good.name if self.good else None,
+        'good_unit': self.good.unit if self.good else None,
         'quantity': self.quantity,
         'transfer_date': self.transfer_date.isoformat() if self.transfer_date else None,
         'transfer_type': self.transfer_type,
@@ -550,33 +674,75 @@ Task.to_dict = task_to_dict
 
 
 # Register CRUD endpoints for Admin Blueprint (full access)
-create_crud_endpoints(admin_bp, User, 'users', allow_non_admin=False) # Admins manage all users
+create_crud_endpoints(admin_bp, User, 'users', allow_non_admin=False)
 create_crud_endpoints(admin_bp, Good, 'goods', allow_non_admin=False)
+create_crud_endpoints(admin_bp, Order, 'orders', allow_non_admin=False)
 create_crud_endpoints(admin_bp, Batch, 'batches', allow_non_admin=False)
 create_crud_endpoints(admin_bp, Supplier, 'suppliers', allow_non_admin=False)
-# Orders, Payments, Tasks are accessible by non-admins, so specific handling below
-# Transfers are admin-only for now, can be changed later
 create_crud_endpoints(admin_bp, Transfer, 'transfers', allow_non_admin=False)
-
+create_crud_endpoints(admin_bp, Task, 'tasks', allow_non_admin=False)
 
 # Register CRUD endpoints for Staff Blueprint (limited access)
-# Staff can add/edit/complete orders
 create_crud_endpoints(staff_bp, Order, 'orders', allow_non_admin=True)
-create_crud_endpoints(staff_bp, OrderDetail, 'order_details', allow_non_admin=True) # Staff also need order details CRUD
+create_crud_endpoints(staff_bp, OrderDetail, 'order_details', allow_non_admin=True)
 create_crud_endpoints(staff_bp, Task, 'tasks', allow_non_admin=True)
 create_crud_endpoints(staff_bp, Payment, 'payments', allow_non_admin=True)
+
 
 # Staff can GET suppliers and goods, but not add/edit/delete them
 @staff_bp.route('/api/goods', methods=['GET'], endpoint='get_all_goods_staff')
 @login_required
 def get_all_goods_staff():
-    goods = Good.query.all()
+    search_query = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort_by', None)
+    sort_order = request.args.get('sort_order', 'asc')
+
+    items_query = Good.query
+
+    if search_query:
+        items_query = items_query.filter(or_(
+            Good.name.ilike(f'%{search_query}%'),
+            Good.unit.ilike(f'%{search_query}%')
+        ))
+    
+    if sort_by:
+        column = getattr(Good, sort_by, None)
+        if column:
+            if sort_order == 'desc':
+                items_query = items_query.order_by(column.desc())
+            else:
+                items_query = items_query.order_by(column.asc())
+
+    goods = items_query.all()
     return jsonify([good.to_dict() for good in goods])
 
 @staff_bp.route('/api/suppliers', methods=['GET'], endpoint='get_all_suppliers_staff')
 @login_required
 def get_all_suppliers_staff():
-    suppliers = Supplier.query.all()
+    search_query = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort_by', None)
+    sort_order = request.args.get('sort_order', 'asc')
+
+    items_query = Supplier.query
+
+    if search_query:
+        items_query = items_query.filter(or_(
+            Supplier.name.ilike(f'%{search_query}%'),
+            Supplier.contact_person.ilike(f'%{search_query}%'),
+            Supplier.email.ilike(f'%{search_query}%'),
+            Supplier.phone.ilike(f'%{search_query}%'),
+            Supplier.address.ilike(f'%{search_query}%')
+        ))
+    
+    if sort_by:
+        column = getattr(Supplier, sort_by, None)
+        if column:
+            if sort_order == 'desc':
+                items_query = items_query.order_by(column.desc())
+            else:
+                items_query = items_query.order_by(column.asc())
+
+    suppliers = items_query.all()
     return jsonify([supplier.to_dict() for supplier in suppliers])
 
 
@@ -590,22 +756,22 @@ def complete_order(order_id):
     if order.status == 'pending':
         order.status = 'completed'
         data = request.json
-        batches_data = data.get('batches', []) # List of batches actually received
-        payment_method = data.get('payment_method', 'credit') # 'cash' or 'credit'
+        batches_data = data.get('batches', [])
+        payment_method = data.get('payment_method', 'credit')
 
-        order.payment_method = payment_method # Update order's payment method
+        order.payment_method = payment_method
 
         try:
             for batch_info in batches_data:
                 good_id = batch_info.get('good_id')
                 batch_number = batch_info.get('batch_number')
-                quantity_received = float(batch_info.get('quantity_received')) # Use quantity_received
+                quantity_received = float(batch_info.get('quantity_received'))
                 expiry_date_str = batch_info.get('expiry_date')
 
                 if not all([good_id, batch_number, quantity_received is not None]):
                     raise ValueError("Missing batch details for completion.")
 
-                if quantity_received <= 0: # Do not create batches for zero or negative received quantity
+                if quantity_received <= 0:
                     continue
 
                 expiry_date = datetime.datetime.strptime(expiry_date_str, '%Y-%m-%d').date() if expiry_date_str else None
@@ -614,7 +780,7 @@ def complete_order(order_id):
                     good_id=good_id,
                     batch_number=batch_number,
                     quantity=quantity_received,
-                    purchase_date=datetime.date.today(), # Set purchase date to today
+                    purchase_date=datetime.date.today(),
                     expiry_date=expiry_date
                 )
                 db.session.add(new_batch)
@@ -625,7 +791,6 @@ def complete_order(order_id):
                 else:
                     raise ValueError(f"Good with ID {good_id} not found.")
 
-            # If order is cash payment, record a payment immediately
             if payment_method == 'cash' and order.total_amount > 0:
                 new_payment = Payment(
                     supplier_id=order.supplier_id,
@@ -634,14 +799,14 @@ def complete_order(order_id):
                     notes=f"Cash payment for Order #{order.id}"
                 )
                 db.session.add(new_payment)
-                db.session.flush() # Get ID for association
-                new_payment.orders.append(order) # Link payment to this order
+                db.session.flush()
+                new_payment.orders.append(order)
 
             db.session.commit()
             return jsonify({'message': 'Order completed and inventory updated successfully'}), 200
         except Exception as e:
             db.session.rollback()
-            print(f"Error completing order: {e}") # For debugging
+            print(f"Error completing order: {e}")
             return jsonify({'error': f'Failed to complete order or update inventory: {str(e)}'}), 400
     else:
         return jsonify({'message': 'Order is not in pending status.'}), 400
@@ -663,28 +828,16 @@ def complete_task(task_id):
     else:
         return jsonify({'message': 'Task is already completed'}), 400
 
-# --- Get Outstanding Orders for a Supplier (for Payment feature) ---
 @admin_bp.route('/api/suppliers/<int:supplier_id>/outstanding_orders', methods=['GET'])
 @staff_bp.route('/api/suppliers/<int:supplier_id>/outstanding_orders', methods=['GET'])
 @login_required
 def get_outstanding_orders(supplier_id):
-    # Only get orders that are 'completed' and 'credit' and not yet fully paid
-    # This logic assumes 'payments' link to orders.
-    # A more robust system would track `paid_amount` on Order and check against `total_amount`.
-    # For simplicity now, we will consider orders with payment_method='credit' that are 'completed'
-    # and not linked to any payment (or not fully paid - more complex).
-    # For now, let's just get completed 'credit' orders for a supplier not linked to payments.
-    # THIS LOGIC NEEDS REFINEMENT FOR PRODUCTION IF MULTIPLE PARTIAL PAYMENTS ARE ALLOWED.
-    
-    # A better way: calculate paid amount for each order.
-    # Fetch orders for the supplier
     supplier_orders = Order.query.filter_by(supplier_id=supplier_id, status='completed', payment_method='credit').all()
     
     outstanding_orders_list = []
     for order in supplier_orders:
-        paid_amount_for_order = sum(p.amount for p in order.payments) # This sums up payments *associated* with this order
+        paid_amount_for_order = sum(p.amount for p in order.payments)
         
-        # If the order's total amount is greater than the sum of amounts of payments linked to it
         if order.total_amount > paid_amount_for_order:
             outstanding_orders_list.append({
                 'id': order.id,
@@ -709,28 +862,19 @@ def create_db():
         db.create_all()
         print("Database tables created.")
 
-        # Optional: Add a default admin user if one doesn't exist
         if not User.query.filter_by(username='admin').first():
             admin_user = User(username='admin', role='admin')
-            admin_user.set_password('adminpass') # CHANGE THIS PASSWORD IN PRODUCTION!
+            admin_user.set_password('adminpass')
             db.session.add(admin_user)
             db.session.commit()
             print("Default admin user 'admin' created with password 'adminpass'.")
         
         if not User.query.filter_by(username='staff').first():
             staff_user = User(username='staff', role='staff')
-            staff_user.set_password('staffpass') # CHANGE THIS PASSWORD IN PRODUCTION!
+            staff_user.set_password('staffpass')
             db.session.add(staff_user)
             db.session.commit()
             print("Default staff user 'staff' created with password 'staffpass'.")
 
-# --- Main Run Block ---
 if __name__ == '__main__':
-    # To run:
-    # 1. Ensure MySQL is running and you have created a database named 'restaurant_inventory'.
-    # 2. Update SQLALCHEMY_DATABASE_URI in app.config with your MySQL credentials.
-    # 3. Open your terminal in the project directory.
-    # 4. Set FLASK_APP=app.py (Windows: set FLASK_APP=app.py, Linux/macOS: export FLASK_APP=app.py)
-    # 5. Run 'flask create-db' to create tables and default admin user.
-    # 6. Run 'flask run' to start the development server.
-    app.run(debug=True) # debug=True is for development, set to False in production
+    app.run(debug=True)

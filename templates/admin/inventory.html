@@ -7,9 +7,13 @@
 <div class="bg-white p-6 rounded-lg shadow-md">
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-semibold text-gray-800">All Goods</h2>
-        <button id="addGoodBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
-            Add New Good
-        </button>
+        <div class="flex items-center space-x-4">
+            <input type="text" id="searchInput" placeholder="Search goods..."
+                   class="shadow appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            <button id="addGoodBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                Add New Good
+            </button>
+        </div>
     </div>
 
     <div class="overflow-x-auto">
@@ -17,27 +21,23 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Stock</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reorder Level</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="name">Name <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="unit">Unit <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="current_stock_quantity">Current Stock <i class="fas fa-sort ml-1"></i></button>
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <button class="sort-btn flex items-center" data-sort-by="reorder_level">Reorder Level <i class="fas fa-sort ml-1"></i></button>
+                    </th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for good in goods %}
-                <tr data-id="{{ good.id }}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ good.id }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="name">{{ good.name }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="unit">{{ good.unit }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="current_stock_quantity">{{ good.current_stock_quantity }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="reorder_level">{{ good.reorder_level }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="edit-btn text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
-                        <button class="delete-btn text-red-600 hover:text-red-900">Delete</button>
-                    </td>
-                </tr>
-                {% endfor %}
+            <tbody class="bg-white divide-y divide-gray-200" id="inventoryTableBody">
+                <!-- Data will be loaded here by JavaScript -->
             </tbody>
         </table>
     </div>
@@ -74,7 +74,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const table = document.getElementById('inventoryTable');
+        const inventoryTableBody = document.getElementById('inventoryTableBody');
         const addGoodBtn = document.getElementById('addGoodBtn');
         const goodModal = document.getElementById('goodModal');
         const cancelGoodBtn = document.getElementById('cancelGoodBtn');
@@ -84,12 +84,115 @@
         const goodUnitInput = document.getElementById('goodUnit');
         const goodReorderLevelInput = document.getElementById('goodReorderLevel');
         const modalTitle = document.getElementById('modalTitle');
+        const searchInput = document.getElementById('searchInput');
+        const sortButtons = document.querySelectorAll('.sort-btn');
 
-        let isEditing = false;
+        let currentSearchQuery = '';
+        let currentSortBy = null;
+        let currentSortOrder = 'asc'; // 'asc' or 'desc'
+
+        // Debounce function for search input
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), delay);
+            };
+        }
+
+        async function fetchGoodsAndRenderTable() {
+            const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+            let url = `${apiPrefix}/goods?search=${encodeURIComponent(currentSearchQuery)}`;
+            if (currentSortBy) {
+                url += `&sort_by=${encodeURIComponent(currentSortBy)}&sort_order=${encodeURIComponent(currentSortOrder)}`;
+            }
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch goods data');
+                }
+                const goods = await response.json();
+                renderTable(goods);
+                updateSortIcons();
+            } catch (error) {
+                alert('Error loading inventory: ' + error.message);
+                console.error('Error fetching goods:', error);
+            }
+        }
+
+        function renderTable(goods) {
+            inventoryTableBody.innerHTML = ''; // Clear existing rows
+            if (goods.length === 0) {
+                inventoryTableBody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No goods found.</td></tr>`;
+                return;
+            }
+
+            goods.forEach(good => {
+                const row = document.createElement('tr');
+                row.dataset.id = good.id;
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${good.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="name">${good.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="unit">${good.unit}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="current_stock_quantity">${good.current_stock_quantity}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" data-field="reorder_level">${good.reorder_level}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="edit-btn text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900">Delete</button>
+                    </td>
+                `;
+                inventoryTableBody.appendChild(row);
+            });
+        }
+
+        function updateSortIcons() {
+            sortButtons.forEach(button => {
+                const icon = button.querySelector('i');
+                icon.classList.remove('fa-sort-up', 'fa-sort-down');
+                icon.classList.add('fa-sort'); // Default icon
+
+                if (button.dataset.sortBy === currentSortBy) {
+                    if (currentSortOrder === 'asc') {
+                        icon.classList.remove('fa-sort');
+                        icon.classList.add('fa-sort-up');
+                    } else {
+                        icon.classList.remove('fa-sort');
+                        icon.classList.add('fa-sort-down');
+                    }
+                }
+            });
+        }
+
+        // Initial fetch on page load
+        fetchGoodsAndRenderTable();
+
+        // Search input event listener with debounce
+        searchInput.addEventListener('input', debounce((e) => {
+            currentSearchQuery = e.target.value;
+            fetchGoodsAndRenderTable();
+        }, 300)); // 300ms debounce
+
+        // Sort button event listeners
+        sortButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const sortBy = button.dataset.sortBy;
+                if (currentSortBy === sortBy) {
+                    // Toggle sort order if clicking same column
+                    currentSortOrder = (currentSortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                    // New column, default to ascending
+                    currentSortBy = sortBy;
+                    currentSortOrder = 'asc';
+                }
+                fetchGoodsAndRenderTable();
+            });
+        });
+
 
         // Open Add Modal
         addGoodBtn.addEventListener('click', () => {
-            isEditing = false;
             modalTitle.textContent = 'Add New Good';
             goodForm.reset();
             goodIdInput.value = '';
@@ -105,7 +208,8 @@
         goodForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = goodIdInput.value;
-            const url = id ? `/admin/api/goods/${id}` : '/admin/api/goods';
+            const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+            const url = id ? `${apiPrefix}/goods/${id}` : `${apiPrefix}/goods`;
             const method = id ? 'PUT' : 'POST';
 
             const data = {
@@ -128,24 +232,23 @@
 
                 alert('Good saved successfully!');
                 goodModal.classList.add('hidden');
-                // Reload the page to see changes or update table dynamically
-                location.reload();
+                fetchGoodsAndRenderTable(); // Re-fetch and render table
 
             } catch (error) {
                 alert('Error: ' + error.message);
             }
         });
 
-        // Handle Edit/Delete Buttons
-        table.addEventListener('click', async (e) => {
+        // Handle Edit/Delete Buttons (event delegation)
+        inventoryTableBody.addEventListener('click', async (e) => {
             if (e.target.classList.contains('edit-btn')) {
-                isEditing = true;
                 modalTitle.textContent = 'Edit Good';
                 const row = e.target.closest('tr');
                 const id = row.dataset.id;
                 
                 try {
-                    const response = await fetch(`/admin/api/goods/${id}`);
+                    const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+                    const response = await fetch(`${apiPrefix}/goods/${id}`);
                     if (!response.ok) {
                         throw new Error('Failed to fetch good data');
                     }
@@ -166,7 +269,8 @@
                     const row = e.target.closest('tr');
                     const id = row.dataset.id;
                     try {
-                        const response = await fetch(`/admin/api/goods/${id}`, {
+                        const apiPrefix = "{{ '/admin/api' if current_user.role == 'admin' else '/staff/api' }}";
+                        const response = await fetch(`${apiPrefix}/goods/${id}`, {
                             method: 'DELETE'
                         });
                         if (!response.ok) {
@@ -174,7 +278,7 @@
                             throw new Error(errorData.error || 'Failed to delete good');
                         }
                         alert('Good deleted successfully!');
-                        row.remove(); // Remove row from table
+                        fetchGoodsAndRenderTable(); // Re-fetch and render table
                     } catch (error) {
                         alert('Error: ' + error.message);
                     }
