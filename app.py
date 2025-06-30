@@ -292,11 +292,14 @@ def suppliers():
 
 @admin_bp.route('/users')
 def users():
-    return render_template('admin/users.html', users=[])
+    if current_user.role == 'admin':
+        return render_template('admin/users.html', users=User.query.all())
+    return render_template('admin/users.html', users=[current_user])
 
 @admin_bp.route('/payments')
 def payments():
-    return render_template('admin/payments.html', payments=[], suppliers=Supplier.query.all())
+    payments = Payment.query.order_by(Payment.payment_date.desc()).all()
+    return render_template('admin/payments.html', payments=payments, suppliers=Supplier.query.all())
 
 @admin_bp.route('/transfers')
 def transfers():
@@ -453,7 +456,8 @@ def create_crud_endpoints(bp, model, name, allow_non_admin=False):
                 new_item.set_password(data['password'])
                 logger.info(f'User {current_user.username} (ID: {current_user.id}) added new user: {data["username"]} (Role: {data.get("role", "staff")}).')
             elif model == Order:
-                new_item = model(user_id=current_user.id, **{k: v for k, v in data.items() if k != 'details'})
+                clean_data = {k: v for k, v in data.items() if k not in ['details', 'user_id']}
+                new_item = model(user_id=current_user.id, **clean_data)
                 db.session.add(new_item)
                 db.session.flush()
 
@@ -739,6 +743,7 @@ create_crud_endpoints(admin_bp, Batch, 'batches', allow_non_admin=False)
 create_crud_endpoints(admin_bp, Supplier, 'suppliers', allow_non_admin=False)
 create_crud_endpoints(admin_bp, Transfer, 'transfers', allow_non_admin=False)
 create_crud_endpoints(admin_bp, Task, 'tasks', allow_non_admin=False)
+create_crud_endpoints(admin_bp, Payment, 'payments', allow_non_admin=False)
 
 # Register CRUD endpoints for Staff Blueprint (limited access)
 create_crud_endpoints(staff_bp, Order, 'orders', allow_non_admin=True)
